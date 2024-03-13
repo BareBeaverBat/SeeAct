@@ -1,3 +1,4 @@
+# IN USE
 website_dict = {'careers.walmart': 'https://careers.walmart.com/', 'dmv.virginia.gov': 'https://www.dmv.virginia.gov/',
                 'thumbtack': 'https://www.thumbtack.com/', 'redfin': 'https://www.redfin.com/',
                 'weather': 'https://weather.com/', 'accuweather': 'https://www.accuweather.com/',
@@ -26,6 +27,7 @@ website_dict = {'careers.walmart': 'https://careers.walmart.com/', 'dmv.virginia
                 'tiktok.music': 'https://music.tiktok.com/au/', 'tripadvisor': 'https://www.tripadvisor.com/',
                 'shopping.google': 'https://shopping.google.com/', 'nba': 'https://www.nba.com/'}
 
+# doesn't seem to be used in any way that's relevant for the browser extension
 tasks_from_website = [(
     'Book a cheapest bundle and save option for 2 adults from Ahmedabad to Dubai on November 18 with free cancellation options, hotel should be a 3 star near Burj Khalifa with guest rating above 4, one night',
     'https://us.trip.com/?locale=en-us'),
@@ -67,6 +69,7 @@ tasks_from_website = [(
     ('play the video where Larry Bird made his NBA debut vs the Houston Rockets.', "https://www.nba.com/"),
     ('Look for a White PlayStation 5 Console and save it', "https://shopping.google.com/")]
 
+# doesn't seem to be used in any way that's relevant for the browser extension
 tasks_from_task = [
     ('Search for a one way flight from Dublin to Malta on November 18, 2023 for 2 adults.', "http://ryanair.com/"), (
         'Add a e-gift card to bag of $100 for recipient John and email address abc@test.com from buckeye.foobar@gmail.com with message gift card.',
@@ -109,6 +112,7 @@ tasks_from_task = [
         'Find the current NFL standings for the AFC East division and determine which team is in first place.',
         "https://www.nfl.com/")]
 
+# doesn't seem to be used in any way that's relevant for the browser extension
 tasks_from_domain = [('Show me jobs for MBA & Graduate Internships.', "https://careers.walmart.com/"),
                      ('Find a driver training school in Dublin', "https://www.dmv.virginia.gov/"), (
                          'View the profile of a Wedding Photographer near 10203 for a 4 hour wedding on November 18',
@@ -149,6 +153,7 @@ tasks_from_domain = [('Show me jobs for MBA & Graduate Internships.', "https://c
                      ('Show me the monthly weather forecast for florida city', "https://www.accuweather.com/"),
                      ('Find the latest news about Netflix stock', "https://www.google.com/finance/")]
 
+# doesn't seem to be used in any way that's relevant for the browser extension
 original_domain = [('Show me jobs for MBA & Graduate Internships.', 'careers.walmart'),
                    ('Find a driver training school in Dublin', 'dmv.virginia.gov'), (
                    'View the profile of a Wedding Photographer near 10203 for a 4 hour wedding on april 13',
@@ -182,6 +187,7 @@ original_domain = [('Show me jobs for MBA & Graduate Internships.', 'careers.wal
                    ('Show me the monthly weather forecast for florida city', 'accuweather'),
                    ('Find the latest news about Netflix stock', 'finance.google')]
 
+# doesn't seem to be used in any way that's relevant for the browser extension
 original_task = [('Search for a one way flight from Dublin to Malta on April 22, 2023 for 2 adults.', 'ryanair'), (
 'Add a e-gift card to bag of $100 for recipient John and email address abc@test.com from buckeye.foobar@gmail.com with message gift card.',
 'underarmour'), ('Find the last game of the season for the Toronto Raptors.', 'sports.yahoo'),
@@ -216,6 +222,7 @@ original_task = [('Search for a one way flight from Dublin to Malta on April 22,
                  'Find the current NFL standings for the AFC East division and determine which team is in first place.',
                  'nfl')]
 
+# doesn't seem to be used in any way that's relevant for the browser extension
 original_website = [(
                     'Book a cheapest bundle and save option for 2 adults from Ahmedabad to Dubai on April 5 with free cancellation options, hotel should be a 3 star near Burj Khalifa with guest rating above 4, one night',
                     'trip'), ('Check the details of order 12345 with email 12345@gmail.com', 'macys'), (

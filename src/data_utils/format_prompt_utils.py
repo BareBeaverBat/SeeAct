@@ -16,6 +16,8 @@
 import string
 import lxml
 from .dom_utils import get_tree_repr, data_prune_tree
+
+#probably not relevant for browser extension
 def data_format_input_multichoice(
         sample, candidate_ids, gt=-1, previous_k=5, keep_html_brackets=False
 ):
@@ -75,7 +77,7 @@ def data_format_input_multichoice(
             seq_target += f"Value: {current_action_value}"
     return tree_repr, seq_input, seq_target, choices, node_to_keep
 
-
+#unused
 def generate_query_prompt(system_prompt="", task="", previous_actions=None, question_description=""):
     """
     Generate the first phase prompt to ask model to generate general descriptions about {environment, high-level plans, next step action}
@@ -106,6 +108,7 @@ def generate_query_prompt(system_prompt="", task="", previous_actions=None, ques
     return query_text
 
 
+#IN USE
 def generate_new_query_prompt(system_prompt="", task="", previous_actions=None, question_description=""):
     """
     Generate the first phase prompt to ask model to generate general descriptions about {environment, high-level plans, next step action}
@@ -136,6 +139,7 @@ def generate_new_query_prompt(system_prompt="", task="", previous_actions=None, 
     query_text += question_description
     return [sys_role,query_text]
 
+#unused
 def generate_referring_prompt(referring_description="", element_format="", action_format="", value_format="",
                               choices=None):
     referring_prompt = ""
@@ -169,7 +173,7 @@ def generate_referring_prompt(referring_description="", element_format="", actio
 
     return referring_prompt
 
-
+#IN USE
 def generate_new_referring_prompt(referring_description="", element_format="", action_format="", value_format="",
                               choices=None,split="4"):
     referring_prompt = ""
@@ -205,6 +209,7 @@ def generate_new_referring_prompt(referring_description="", element_format="", a
 
     return referring_prompt
 
+#IN USE
 def format_options(choices):
     option_text = ""
     abcd = ''
@@ -225,6 +230,7 @@ def format_options(choices):
     return option_text
 
 
+#IN USE
 def generate_option_name(index):
     if index < 26:
         return string.ascii_uppercase[index]
@@ -235,6 +241,7 @@ def generate_option_name(index):
         second_letter = string.ascii_uppercase[second_letter_index]
         return f"{first_letter}{second_letter}"
 
+#IN USE
 def get_index_from_option_name(name):
     if len(name) == 1:
         return string.ascii_uppercase.index(name)

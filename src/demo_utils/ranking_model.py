@@ -26,6 +26,7 @@ from tqdm.autonotebook import tqdm, trange
 import numpy as np
 
 logger = logging.getLogger(__name__)
+# IN USE
 def find_topk(a, k, axis=-1, largest=True, sorted=True):
     if axis is None:
         axis_size = a.size
@@ -53,7 +54,8 @@ def find_topk(a, k, axis=-1, largest=True, sorted=True):
     return topk_values, topk_indices
 
 
-
+# IN USE
+# fixme? "Redeclared 'CrossEncoder' defined above without usage"
 class CrossEncoder(CrossEncoder):
     def fit(
         self,

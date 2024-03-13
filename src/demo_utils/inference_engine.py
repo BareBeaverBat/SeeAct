@@ -27,7 +27,7 @@ from openai.error import (
 
 import base64
 
-
+#IN USE
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
@@ -40,7 +40,7 @@ class Engine:
     def tokenize(self, input):
         return self.tokenizer(input)
 
-
+# IN USE
 class OpenaiEngine(Engine):
     def __init__(
             self,
@@ -77,12 +77,15 @@ class OpenaiEngine(Engine):
         self.request_interval = 0 if rate_limit == -1 else 60.0 / rate_limit
         self.next_avil_time = [0] * len(self.api_keys)
         self.current_key_idx = 0
+        #todo why is this passing keyword arguments when the Engine class defined above doesn't have any named arguments for its constructor?
         Engine.__init__(self, **kwargs)
 
+    #unused??? that open call also looks really strange
     def encode_image(self, image_path):
         with open(self, image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
 
+    #IN USE (maybe this should have a max time out!)
     @backoff.on_exception(
         backoff.expo,
         (APIError, RateLimitError, APIConnectionError, ServiceUnavailableError, InvalidRequestError),
@@ -107,10 +110,9 @@ class OpenaiEngine(Engine):
             prompt1_input = [
                 {"role": "system", "content": [{"type": "text", "text": prompt0}]},
                 {"role": "user",
-                 "content": [{"type": "text", "text": prompt1}, {"type": "image_url", "image_url": {"url":
-                                                                                                        f"data:image/jpeg;base64,{base64_image}",
-                                                                                                    "detail": "high"},
-                                                                 }]},
+                 "content": [{"type": "text", "text": prompt1},
+                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}",
+                                                                 "detail": "high"}, }]},
             ]
             response1 = openai.ChatCompletion.create(
                 model=model if model else self.model,
@@ -127,9 +129,9 @@ class OpenaiEngine(Engine):
             prompt2_input = [
                 {"role": "system", "content": [{"type": "text", "text": prompt0}]},
                 {"role": "user",
-                 "content": [{"type": "text", "text": prompt1}, {"type": "image_url", "image_url": {"url":
-                                                                                                        f"data:image/jpeg;base64,{base64_image}",
-                                                                                                    "detail": "high"}, }]},
+                 "content": [{"type": "text", "text": prompt1},
+                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}",
+                                                                 "detail": "high"}, }]},
                 {"role": "assistant", "content": [{"type": "text", "text": f"\n\n{ouput__0}"}]},
                 {"role": "user", "content": [{"type": "text", "text": prompt2}]}, ]
             response2 = openai.ChatCompletion.create(
@@ -140,8 +142,12 @@ class OpenaiEngine(Engine):
                 **kwargs,
             )
             return [choice["message"]["content"] for choice in response2["choices"]][0]
+        #what about interactions that span more than 1 response from the model and follow-up message from client? not needed yet?
+        # I think I'm not understanding this part sufficiently well yet
+        # maybe turn_number == 1 just means it isn't the very first LMM interaction in the current task
+        # if so, in ts code, use boolean var to convey that more clearly
 
-
+# unused? why doesn't this extend OpenaiEngine?
 class OpenaiEngine_MindAct(Engine):
     def __init__(
             self,

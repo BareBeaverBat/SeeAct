@@ -32,6 +32,7 @@ from src.data_utils.image_utils import batch_elements_by_locality, batch_element
 from src.data_utils.format_prompt_utils import data_format_input_multichoice
 
 
+#seems irrelevant for browser extension since only used for offline experiments
 def run(args):
 
     with open(args.selected_set_task_id_path, 'rb') as f:

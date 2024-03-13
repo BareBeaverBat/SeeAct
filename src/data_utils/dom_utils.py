@@ -38,19 +38,20 @@ salient_attributes = {
 }
 
 
+#unused
 def remove_extra_eol(text):
     # Replace EOL symbols
     text = text.replace('\n', ' ')
     return re.sub(r'\s{2,}', ' ', text)
 
-
+#only referenced in unused function clean_tree
 def clean_text(text):
     if text is None:
         return ""
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-
+#only referenced by an unused function and a function that's unlikely to be relevant for browser extension
 def get_descendants(node, max_depth, current_depth=0):
     if current_depth > max_depth:
         return []
@@ -61,6 +62,7 @@ def get_descendants(node, max_depth, current_depth=0):
     return descendants
 
 
+#unused
 def clean_tree(dom_tree, all_candidate_ids):
     new_tree = copy.deepcopy(dom_tree)
     for node in new_tree.xpath("//*")[::-1]:
@@ -111,7 +113,7 @@ def clean_tree(dom_tree, all_candidate_ids):
             node.getparent().remove(node)
     return new_tree
 
-
+#unused
 def prune_tree(
         dom_tree,
         candidate_set,
@@ -185,6 +187,7 @@ def prune_tree(
     return new_tree
 
 
+#probably not relevant for browser extension
 def data_prune_tree(
         dom_tree,
         candidate_set,
@@ -258,6 +261,7 @@ def data_prune_tree(
     return new_tree, nodes_to_keep
 
 
+#only used in method that's probably irrelevant for browser extension
 def get_attribute_repr(node, max_value_length=5, max_length=20):
     # get attribute values in order
     attr_values_set = set()
@@ -306,6 +310,7 @@ def get_attribute_repr(node, max_value_length=5, max_length=20):
         node.attrib["meta"] = " ".join(attr_values.split()[:max_length])
 
 
+#only used in method that's probably irrelevant for browser extension
 def get_tree_repr(
         tree, max_value_length=5, max_length=20, id_mapping={}, keep_html_brackets=False
 ):
@@ -358,7 +363,7 @@ def get_tree_repr(
 
     return tree_repr, id_mapping
 
-
+#unused
 def extract_elements_from_html(whole_html):
     pattern = r'<text backend_node_id="(\d+)">(.*?)</text>'
     all_element_texts = whole_html.strip().split("\n")
@@ -402,7 +407,7 @@ def extract_elements_from_html(whole_html):
 
     return element_dict
 
-
+#unused
 def locate_element_attributes(
         sample, keep_html_brackets=False
 ):
@@ -432,7 +437,7 @@ def locate_element_attributes(
         ])
     return all_node_attributes
 
-
+#only referenced in unused function
 def clean_element_text(element_text):
     if not isinstance(element_text, str):
         return ""

@@ -124,7 +124,7 @@ ignore_args = [
 ]
 
 
-
+#IN USE
 async def normal_launch_async(playwright: Playwright,trace_dir=None):
     browser = await playwright.chromium.launch(
         traces_dir=None,
@@ -137,7 +137,7 @@ async def normal_launch_async(playwright: Playwright,trace_dir=None):
     )
     return browser
 
-
+#unused
 def normal_launch(playwright: Playwright):
     browser = playwright.chromium.launch(
         headless=False,
@@ -148,7 +148,7 @@ def normal_launch(playwright: Playwright):
     )
     return browser
 
-
+#IN USE
 async def normal_new_context_async(
         browser,
         storage_state=None,
@@ -178,7 +178,7 @@ async def normal_new_context_async(
         await context.tracing.start(screenshots=trace_screenshots, snapshots=trace_snapshots, sources=trace_sources)
     return context
 
-
+#unused
 def normal_new_context(
         browser,
         storage_state=None,
@@ -192,6 +192,7 @@ def normal_new_context(
     )
 
 
+#unused
 def persistent_launch(playwright: Playwright, user_data_dir: str = ""):
     context = playwright.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
@@ -210,7 +211,7 @@ def persistent_launch(playwright: Playwright, user_data_dir: str = ""):
     )
     return context
 
-
+#unused
 async def persistent_launch_async(playwright: Playwright, user_data_dir: str = "", record_video_dir="video"):
     context = await playwright.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
@@ -227,7 +228,7 @@ async def persistent_launch_async(playwright: Playwright, user_data_dir: str = "
     )
     return context
 
-
+#unused
 def next_free_port(port=9876, max_port=9999):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while port <= max_port:
@@ -239,7 +240,7 @@ def next_free_port(port=9876, max_port=9999):
             port += 1
     raise IOError("no free ports")
 
-
+#unused
 def connect_via_cdp(playwright: Playwright, user_data_dir: str = ""):
     cdp_address = (
         "ws://127.0.0.1:44677/devtools/browser/f41cafc7-7dfb-4b74-8e2a-d87a18751b07"
@@ -249,7 +250,7 @@ def connect_via_cdp(playwright: Playwright, user_data_dir: str = ""):
     )
     return browser
 
-
+#unused
 async def connect_via_cdp_async(playwright: Playwright, user_data_dir: str = ""):
     chrome_process = subprocess.Popen(
         [
@@ -273,13 +274,13 @@ async def connect_via_cdp_async(playwright: Playwright, user_data_dir: str = "")
     browser = await playwright.chromium.connect_over_cdp(endpoint_url=cdp_address)
     return browser, chrome_process
 
-
+# IN USE
 def remove_extra_eol(text):
     # Replace EOL symbols
     text = text.replace('\n', ' ')
     return re.sub(r'\s{2,}', ' ', text)
 
-
+# IN USE
 def get_first_line(s):
     first_line = s.split('\n')[0]
     tokens = first_line.split()
@@ -288,6 +289,7 @@ def get_first_line(s):
     else:
         return first_line
 
+# IN USE
 async def get_element_description(element, tag_name, role_value, type_value):
     '''
          Asynchronously generates a descriptive text for a web element based on its tag type.
@@ -398,7 +400,7 @@ async def get_element_description(element, tag_name, role_value, type_value):
 
     return None
 
-
+#IN USE
 async def get_element_data(element, tag_name):
     tag_name_list = ['a', 'button',
                      'input',
@@ -442,7 +444,7 @@ async def get_element_data(element, tag_name):
 
     return [center_point, description, tag_head, box_model, selector, real_tag_name]
 
-
+#IN USE
 async def get_interactive_elements_with_playwright(page):
     interactive_elements_selectors = [
         'a', 'button',
@@ -483,7 +485,7 @@ async def get_interactive_elements_with_playwright(page):
                 interactive_elements.append(i)
     return interactive_elements
 
-
+#IN USE
 async def select_option(selector, value):
     best_option = [-1, "", -1]
     for i in range(await selector.locator("option").count()):
@@ -495,6 +497,7 @@ async def select_option(selector, value):
     return remove_extra_eol(best_option[1]).strip()
 
 
+#IN USE
 def saveconfig(config, save_file):
     """
     config is a dictionary.

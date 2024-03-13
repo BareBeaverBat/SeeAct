@@ -217,7 +217,7 @@ ELEMENT: The uppercase letter of your choice. (No need for PRESS ENTER)""",
 
 
 
-
+#IN USE
 def generate_prompt(experiment_split, task=None, previous=None, choices=None):
     assert experiment_split != None, "Please specify the experiment split."
     assert task != None, "Please input the task."

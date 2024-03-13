@@ -19,6 +19,7 @@ import torch
 import json
 import copy
 
+#only used for offline experiments- not relevant for browser extension
 def convert_elements2detections(candidate_elements):
     """
     Extract element coordinates
@@ -42,6 +43,7 @@ def convert_elements2detections(candidate_elements):
     return detections
 
 
+#only used for offline experiments- not relevant for browser extension
 def extract_topk_elements(all_elements, k):
     topk_elements = []
     for element in all_elements:
@@ -52,6 +54,7 @@ def extract_topk_elements(all_elements, k):
     return topk_elements
 
 
+#only used for offline experiments- not relevant for browser extension
 def extract_elements_by_ids(all_elements, ids):
     """
     Extract elements specified by the list of element_id
@@ -75,6 +78,7 @@ def extract_elements_by_ids(all_elements, ids):
     return ordered_output
 
 
+#only used for offline experiments- not relevant for browser extension
 def batch_elements_by_locality(elements, num_choices):
     # Sort elements by y1 location (ascending order)
     sorted_elements = sorted(elements, key=lambda x: float(
@@ -88,6 +92,7 @@ def batch_elements_by_locality(elements, num_choices):
 
     return batches
 
+#only used for offline experiments- not relevant for browser extension
 def batch_elements_by_locality_16_16_17(elements):
     # Sort elements by y1 location (ascending order)
     sorted_elements = sorted(elements, key=lambda x: float(
@@ -111,7 +116,7 @@ def batch_elements_by_locality_16_16_17(elements):
 
     return batches
 
-
+#unused
 def split_elements_by_locality_final_round(elements):
     # Sort elements by y1 location (ascending order)
     sorted_elements = sorted(elements, key=lambda x: float(

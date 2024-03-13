@@ -31,7 +31,7 @@ from src.data_utils.image_utils import extract_topk_elements, extract_elements_b
 from src.data_utils.image_utils import batch_elements_by_locality, batch_elements_by_locality_16_16_17
 from src.data_utils.format_prompt_utils import data_format_input_multichoice
 
-
+#seems irrelevant for browser extension since only used for offline experiments
 def run(args):
     with open(args.selected_set_task_id_path, 'rb') as f:
         selected_set_task_id_dict = pkl.load(f)

@@ -105,7 +105,7 @@ llm_prompt = [
 ]
 
 
-
+#unused
 def original_prompt(elements, selected_website, objective, taken_actions):
     prompt = (
             prompt_dict['default_prompt']
@@ -137,6 +137,7 @@ def original_prompt(elements, selected_website, objective, taken_actions):
 
     return prompt
 
+#IN USE
 def format_ranking_input(elements, task, previous_actions):
     converted_elements = [
         (f'<{element[-1]} id="{i}">' if element[-1]!='a' else f'<link id="{i}">')
@@ -158,6 +159,7 @@ def format_ranking_input(elements, task, previous_actions):
     return model_input
 
 
+#IN USE
 def format_choices(elements, candidate_ids, objective, taken_actions):
     prompt_template = llm_prompt
 
@@ -183,6 +185,7 @@ def format_choices(elements, candidate_ids, objective, taken_actions):
 
     return choices
 
+#only referenced by 2 functions which seem unlikely to be relevant for browser extension
 def postprocess_action_llm(text):
     # C.
     # Action: SELECT
@@ -216,7 +219,7 @@ def postprocess_action_llm(text):
     return selected_option, action.strip(), value.strip()
 
 
-
+#IN USE
 def postprocess_action_lmm(text):
     text = text.strip()
     text = text.replace(
@@ -311,6 +314,7 @@ def postprocess_action_lmm(text):
     value = value.group(1) if value is not None else ""
     return selected_option, action.strip(), process_string(process_string(value.strip()))
 
+#IN USE
 def process_string(input_string):
     if input_string.startswith('"') and input_string.endswith('"'):
         input_string = input_string[1:-1]

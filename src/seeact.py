@@ -46,6 +46,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+#cdp- Chrome Devtools Protocol
 @dataclass
 class SessionControl:
     pages = []
@@ -92,8 +93,10 @@ async def page_on_close_handler(page):
                 try:
                     await session_control.active_page.goto("https://www.google.com/", wait_until="load")
                 except Exception as e:
+                    #todo can we please log a warning about an error occurring during the loading of the google home page? or maybe an info or debug message about this?
                     pass
                 await aprint("Switched the active tab to: ", session_control.active_page.url)
+    #todo log a warning if context in session_control is not defined?
 
 
 async def page_on_navigatio_handler(frame):
@@ -167,6 +170,7 @@ async def main(config, base_dir) -> None:
     save_video = config["playwright"]["save_video"]
     viewport_size = config["playwright"]["viewport"]
     tracing = config["playwright"]["tracing"]
+    #todo what's special about locale and geolocation parts of the playwright settings?
     locale = None
     try:
         locale = config["playwright"]["locale"]
@@ -187,6 +191,7 @@ async def main(config, base_dir) -> None:
     # Load ranking model for prune candidate elements
     ranking_model = None
     if ranker_path:
+        #todo ide complains that CrossEncoder.device expects str, not object of pytorch type _C.device
         ranking_model = CrossEncoder(ranker_path, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
                                      num_labels=1, max_length=512, )
 
@@ -202,7 +207,9 @@ async def main(config, base_dir) -> None:
             task_input = default_task
         task_dict["confirmed_task"] = task_input
         website_input = await ainput(
-            f"Please input the complete ulr of the starting website, and press Enter. The URL must be complete (for example, including http), to ensure the browser can successfully load the webpage. \nOr directly press Enter to use the default website: {default_website}\nWebsite: ")
+            "Please input the complete url of the starting website, and press Enter. "
+            "The URL must be complete (for example, including http), to ensure the browser can successfully load the webpage. "
+            f"\nOr directly press Enter to use the default website: {default_website}\nWebsite: ")
         if not website_input:
             website_input = default_website
         task_dict["website"] = website_input
@@ -228,6 +235,8 @@ async def main(config, base_dir) -> None:
             await aprint(f"{main_result_path} already exists")
             if not overwrite:
                 continue
+                #is the idea that in this case the program skips actually running anything?
+                # if so, would it be good for it to tell the user that it's doing that?
         saveconfig(config, os.path.join(main_result_path, "config.toml"))
 
         # init logger
@@ -881,6 +890,7 @@ if __name__ == "__main__":
             print(f"Configuration File Loaded - {os.path.join(base_dir, args.config_path)}")
     except FileNotFoundError:
         print(f"Error: File '{args.config_path}' not found.")
+        #todo I'm confused- why doesn't this have a raise statement after the print? same with next except block
     except toml.TomlDecodeError:
         print(f"Error: File '{args.config_path}' is not a valid TOML file.")
 

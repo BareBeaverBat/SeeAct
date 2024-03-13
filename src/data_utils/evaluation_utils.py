@@ -23,6 +23,7 @@ import lxml
 from src.data_utils.dom_utils import get_tree_repr, data_prune_tree
 logger = logging.getLogger(__name__)
 
+# not relevant for browser extension
 def format_input_multichoice(
     sample, candidate_ids, gt=-1, previous_k=5, keep_html_brackets=False
 ):
@@ -84,6 +85,7 @@ def format_input_multichoice(
     return tree_repr, seq_input, seq_target, choices
 
 
+# not relevant for browser extension
 def posthoc_evaluate_dataset(
         self,
         dataset,
@@ -254,7 +256,7 @@ def posthoc_evaluate_dataset(
 
 
 
-
+# not relevant for browser extension
 def evaluate_dataset_llm(
         self,
         dataset,
