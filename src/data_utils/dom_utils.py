@@ -15,9 +15,10 @@
 
 import copy
 import re
-from lxml import etree
+
 import lxml
 from bs4 import BeautifulSoup
+from lxml import etree
 
 salient_attributes = {
     "alt",

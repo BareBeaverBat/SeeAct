@@ -13,27 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pdb
+import asyncio
+import os
 import random
+import re
 import socket
 import subprocess
-import re
-import asyncio
 from difflib import SequenceMatcher
-from playwright.sync_api import Playwright, expect, sync_playwright
 from pathlib import Path
+
 import toml
-import os
-import logging
-from aioconsole import ainput, aprint
-import time
+from playwright.sync_api import Playwright
 
 list_us_cities = [
     ["New York", 40.77, -73.98],
     ["Log Angeles", 34.05, -118.24],
     ["Chicago", 41.88, -87.63],
     ["Houston", 29.76, -95.36],
-    ["Phoneix", 33.45, -112.07],
+    ["Phoenix", 33.45, -112.07],
     ["Philadelphia", 39.95, -75.17],
     ["San Antonio", 29.53, -98.47],
     ["San Diego", 32.78, -117.15],

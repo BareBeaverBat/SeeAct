@@ -1,4 +1,4 @@
-# IN USE
+# IN USE (but probably not relevant for browser extension)
 website_dict = {'careers.walmart': 'https://careers.walmart.com/', 'dmv.virginia.gov': 'https://www.dmv.virginia.gov/',
                 'thumbtack': 'https://www.thumbtack.com/', 'redfin': 'https://www.redfin.com/',
                 'weather': 'https://weather.com/', 'accuweather': 'https://www.accuweather.com/',

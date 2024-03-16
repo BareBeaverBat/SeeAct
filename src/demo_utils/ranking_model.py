@@ -16,6 +16,7 @@ import logging
 import os
 from typing import Callable, Dict, Type
 
+import numpy as np
 import torch
 from sentence_transformers import CrossEncoder, SentenceTransformer
 from sentence_transformers.evaluation import SentenceEvaluator
@@ -23,7 +24,6 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm, trange
-import numpy as np
 
 logger = logging.getLogger(__name__)
 # IN USE

@@ -14,8 +14,11 @@
 # limitations under the License.
 
 import string
+
 import lxml
+
 from .dom_utils import get_tree_repr, data_prune_tree
+
 
 #probably not relevant for browser extension
 def data_format_input_multichoice(
@@ -108,7 +111,7 @@ def generate_query_prompt(system_prompt="", task="", previous_actions=None, ques
     return query_text
 
 
-#IN USE
+#IN USE- PORTED
 def generate_new_query_prompt(system_prompt="", task="", previous_actions=None, question_description=""):
     """
     Generate the first phase prompt to ask model to generate general descriptions about {environment, high-level plans, next step action}
@@ -173,9 +176,10 @@ def generate_referring_prompt(referring_description="", element_format="", actio
 
     return referring_prompt
 
-#IN USE
+#IN USE - PORTED
 def generate_new_referring_prompt(referring_description="", element_format="", action_format="", value_format="",
                               choices=None,split="4"):
+    # note - in online setting, choices here was being produced by format_prompt.py->format_choices()
     referring_prompt = ""
 
     # Add description about how to format output
@@ -209,7 +213,7 @@ def generate_new_referring_prompt(referring_description="", element_format="", a
 
     return referring_prompt
 
-#IN USE
+#IN USE - PORTED
 def format_options(choices):
     option_text = ""
     abcd = ''
@@ -230,7 +234,7 @@ def format_options(choices):
     return option_text
 
 
-#IN USE
+#IN USE - PORTED
 def generate_option_name(index):
     if index < 26:
         return string.ascii_uppercase[index]
@@ -241,7 +245,7 @@ def generate_option_name(index):
         second_letter = string.ascii_uppercase[second_letter_index]
         return f"{first_letter}{second_letter}"
 
-#IN USE
+#IN USE - PORTED
 def get_index_from_option_name(name):
     if len(name) == 1:
         return string.ascii_uppercase.index(name)

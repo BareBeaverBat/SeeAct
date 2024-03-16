@@ -17,10 +17,13 @@ import collections
 import json
 import logging
 import random
+
+import lxml
 import numpy as np
 from tqdm import tqdm
-import lxml
+
 from src.data_utils.dom_utils import get_tree_repr, data_prune_tree
+
 logger = logging.getLogger(__name__)
 
 # not relevant for browser extension

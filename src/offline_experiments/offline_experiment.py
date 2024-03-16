@@ -13,12 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from src.data_utils.prompts import generate_prompt
 import json
-import jsonlines
 import os
-from src.demo_utils.inference_engine import OpenaiEngine
 
+import jsonlines
+
+from src.data_utils.prompts import generate_prompt
+from src.demo_utils.inference_engine import OpenaiEngine
 
 generation_model = OpenaiEngine(
     rate_limit=-1,

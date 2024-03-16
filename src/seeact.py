@@ -206,6 +206,7 @@ async def main(config, base_dir) -> None:
         if not task_input:
             task_input = default_task
         task_dict["confirmed_task"] = task_input
+        #I assume that, in the browser extension, the starting website will simply be whatever is open in the current tab
         website_input = await ainput(
             "Please input the complete url of the starting website, and press Enter. "
             "The URL must be complete (for example, including http), to ensure the browser can successfully load the webpage. "
@@ -219,6 +220,7 @@ async def main(config, base_dir) -> None:
         task_dict["task_id"] = file_name
         query_tasks.append(task_dict)
 
+    #don't need to iterate over a collection of tasks in browser extension
     for single_query_task in query_tasks:
         confirmed_task = single_query_task["confirmed_task"]
         confirmed_website = single_query_task["website"]
@@ -349,7 +351,7 @@ async def main(config, base_dir) -> None:
                     # if monitor:
                     #     logger.info("Wait for human inspection. Directly press Enter to exit")
                     #     monitor_input = await ainput()
-                    logger.info("Close brownser context")
+                    logger.info("Close browser context")
                     logger.removeHandler(log_fh)
                     logger.removeHandler(console_handler)
 
@@ -863,7 +865,7 @@ async def main(config, base_dir) -> None:
                         logger.info("Wait for human inspection. Directly press Enter to exit")
                         monitor_input = await ainput()
 
-                    logger.info("Close brownser context")
+                    logger.info("Close browser context")
                     logger.removeHandler(log_fh)
                     logger.removeHandler(console_handler)
                     close_context = session_control.context

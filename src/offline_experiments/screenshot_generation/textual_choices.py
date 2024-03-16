@@ -13,23 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
+import base64
+import copy
 import json
 import os
-import jsonlines
-import base64
-import numpy as np
-import cv2
-import copy
-from tqdm import tqdm
-import argparse
-import supervision as sv
-import torch
 import pickle as pkl
 
+import cv2
+import jsonlines
+import numpy as np
+import supervision as sv
+from tqdm import tqdm
+
+from src.data_utils.format_prompt_utils import data_format_input_multichoice
+from src.data_utils.image_utils import batch_elements_by_locality, batch_elements_by_locality_16_16_17
 from src.data_utils.image_utils import convert_elements2detections
 from src.data_utils.image_utils import extract_topk_elements, extract_elements_by_ids
-from src.data_utils.image_utils import batch_elements_by_locality, batch_elements_by_locality_16_16_17
-from src.data_utils.format_prompt_utils import data_format_input_multichoice
+
 
 #seems irrelevant for browser extension since only used for offline experiments
 def run(args):

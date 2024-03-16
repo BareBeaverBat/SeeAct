@@ -14,10 +14,12 @@
 # limitations under the License.
 
 
+import copy
+import json
+
 import supervision as sv
 import torch
-import json
-import copy
+
 
 #only used for offline experiments- not relevant for browser extension
 def convert_elements2detections(candidate_elements):

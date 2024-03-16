@@ -13,8 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .format_prompt_utils import data_format_input_multichoice, \
-    format_options, generate_option_name, generate_new_referring_prompt, generate_new_query_prompt
+from .format_prompt_utils import generate_new_referring_prompt, generate_new_query_prompt
 
 sys_prompt = '''Imagine that you are imitating humans doing web navigation for a task step by step. At each stage, you can see the webpage like humans by a screenshot and know the previous actions before the current step decided by yourself through recorded history. You need to decide on the first following action to take. You can click an element with the mouse, select an option, or type text with the keyboard. (For your understanding, they are like the click(), select_option() and type() functions in playwright respectively) One next step means one operation within the three.'''
 
