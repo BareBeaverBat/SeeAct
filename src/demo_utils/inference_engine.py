@@ -27,18 +27,12 @@ from openai.error import (
 )
 
 
-#IN USE
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
 
 
 class Engine:
     def __init__(self) -> None:
         pass
 
-    def tokenize(self, input):
-        return self.tokenizer(input)
 
 # IN USE
 class OpenaiEngine(Engine):
@@ -70,7 +64,7 @@ class OpenaiEngine(Engine):
             self.api_keys = api_key
         else:
             raise ValueError("api_key must be a string or list")
-        self.stop = stop
+        self.stop = stop # todo should stop be used by the generate method???
         self.temperature = temperature
         self.model = model
         # convert rate limit to minmum request interval
@@ -80,15 +74,16 @@ class OpenaiEngine(Engine):
         #todo why is this passing keyword arguments when the Engine class defined above doesn't have any named arguments for its constructor?
         Engine.__init__(self, **kwargs)
 
-    #unused??? that open call also looks really strange
+    # IN USE (but not relevant for browser extension)
     def encode_image(self, image_path):
-        with open(self, image_path, "rb") as image_file:
+        with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
 
     #IN USE (maybe this should have a max time out!)
     @backoff.on_exception(
         backoff.expo,
         (APIError, RateLimitError, APIConnectionError, ServiceUnavailableError, InvalidRequestError),
+        # why are we backing off rather than terminating if we get an InvalidRequestError?
     )
     def generate(self, prompt: list = None, max_new_tokens=4096, temperature=None, model=None, image_path=None,
                  ouput__0=None, turn_number=0, **kwargs):
@@ -105,7 +100,7 @@ class OpenaiEngine(Engine):
         prompt2 = prompt[2]
 
         if turn_number == 0:
-            base64_image = encode_image(image_path)
+            base64_image = self.encode_image(image_path)
             # Assume one turn dialogue
             prompt1_input = [
                 {"role": "system", "content": [{"type": "text", "text": prompt0}]},
@@ -121,11 +116,13 @@ class OpenaiEngine(Engine):
                 temperature=temperature if temperature else self.temperature,
                 **kwargs,
             )
+            if self.request_interval > 0:
+                self.next_avil_time[self.current_key_idx] = time.time() + self.request_interval
             answer1 = [choice["message"]["content"] for choice in response1["choices"]][0]
 
             return answer1
         elif turn_number == 1:
-            base64_image = encode_image(image_path)
+            base64_image = self.encode_image(image_path)
             prompt2_input = [
                 {"role": "system", "content": [{"type": "text", "text": prompt0}]},
                 {"role": "user",
@@ -141,11 +138,10 @@ class OpenaiEngine(Engine):
                 temperature=temperature if temperature else self.temperature,
                 **kwargs,
             )
+            if self.request_interval > 0:
+                self.next_avil_time[self.current_key_idx] = time.time() + self.request_interval
             return [choice["message"]["content"] for choice in response2["choices"]][0]
-        #what about interactions that span more than 1 response from the model and follow-up message from client? not needed yet?
-        # I think I'm not understanding this part sufficiently well yet
-        # maybe turn_number == 1 just means it isn't the very first LMM interaction in the current task
-        # if so, in ts code, use boolean var to convey that more clearly
+
 
 # unused? why doesn't this extend OpenaiEngine?
 class OpenaiEngine_MindAct(Engine):

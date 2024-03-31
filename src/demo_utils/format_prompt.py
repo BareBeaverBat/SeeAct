@@ -159,7 +159,7 @@ def format_ranking_input(elements, task, previous_actions):
     return model_input
 
 
-#IN USE
+#IN USE - PORTED
 def format_choices(elements, candidate_ids, objective, taken_actions):
     prompt_template = llm_prompt
 
@@ -167,14 +167,8 @@ def format_choices(elements, candidate_ids, objective, taken_actions):
                     f'<{element[2]} id="{i}">'
                     + (
                         element[1]
-                        if len(element[1].split()) < 30
+                        if "select" == element[2] or len(element[1].split()) < 30
                         else " ".join(element[1].split()[:30]) + "..."
-                    )
-                    + f"</{element[-1]}>"
-
-                    if element[2]!="select" else f'<{element[2]} id="{i}">'
-                    + (
-                        element[1]
                     )
                     + f"</{element[-1]}>"
                     for i, element in enumerate(elements)
@@ -293,20 +287,8 @@ def postprocess_action_lmm(text):
         selected_option = "Invalid"
 
     action = re.search(r"ACTION: (CLICK|SELECT|TYPE|HOVER|PRESS ENTER|TERMINATE|NONE)", text)
-
-
     if action:
         action = action.group(1)
-        start = text.find(f"ACTION: {action}")
-        for probing_length in range(15, 160, 10):
-            selected_option_from_action = re.findall(
-                r"ELEMENT: ([A-Z]{2}|[A-Z])",
-                text[max(start - probing_length, 0):start])
-            # print("text span:",text[max(start-probing_length,0):start])
-            # print("finded group:",selected_option__)
-            if selected_option_from_action:
-                selected_option = selected_option_from_action[0]
-                break
     else:
         action = "None"
 

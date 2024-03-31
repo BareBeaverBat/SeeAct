@@ -174,9 +174,7 @@ To be successful, it is important to follow the following rules:
 
 seeact_online_action_format = "ACTION: Choose an action from {CLICK, SELECT, TYPE, PRESS ENTER, TERMINATE, NONE}."
 
-seeact_online_value_format = "VALUE: Provide additional input based on ACTION.\n\nThe VALUE means:\nIf ACTION == TYPE, specify the " \
-               "text to be typed.\nIf ACTION == SELECT, indicate the option to be chosen. Revise the selection value to align with the available options within the element.\nIf ACTION == CLICK, PRESS ENTER, TERMINATE or NONE, " \
-               "write \"None\"."
+seeact_online_value_format = "VALUE: Provide additional input based on ACTION.\n\nThe VALUE means:\nIf ACTION == TYPE, specify the text to be typed.\nIf ACTION == SELECT, indicate the option to be chosen. Revise the selection value to align with the available options within the element.\nIf ACTION == CLICK, PRESS ENTER, TERMINATE or NONE, write \"None\"."
 
 seeact_choice_prompt_dict = {
     "system_prompt": seeact_online_sys_prompt,
@@ -218,7 +216,7 @@ ELEMENT: The uppercase letter of your choice. (No need for PRESS ENTER)""",
 
 #IN USE
 def generate_prompt(experiment_split, task=None, previous=None, choices=None):
-    assert experiment_split != None, "Please specify the experiment split."
+    assert experiment_split is not None, "Please specify the experiment split."
     assert task != None, "Please input the task."
     assert previous != None, "Please input the previous actions."
 

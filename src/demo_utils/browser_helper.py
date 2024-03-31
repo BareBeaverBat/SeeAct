@@ -121,7 +121,7 @@ ignore_args = [
 ]
 
 
-#IN USE
+#IN USE, but not relevant for extension
 async def normal_launch_async(playwright: Playwright,trace_dir=None):
     browser = await playwright.chromium.launch(
         traces_dir=None,
@@ -145,7 +145,7 @@ def normal_launch(playwright: Playwright):
     )
     return browser
 
-#IN USE
+#IN USE but not directly relevant for extension
 async def normal_new_context_async(
         browser,
         storage_state=None,
@@ -330,10 +330,13 @@ async def get_element_description(element, tag_name, role_value, type_value):
         text3 = " - Options: "
         text4 = ""
 
+        # todo is this not supporting multi-select elements? if not, mark that explicitly as area for improvement?
         text2 = await element.evaluate(
             "select => select.options[select.selectedIndex].textContent", timeout=0
         )
 
+        #todo it looks to me like this if block is ruling out the ability to support <select> elements
+        # which initially have no selected option; confirm with Boyuan
         if text2:
             options = await element.evaluate("select => Array.from(select.options).map(option => option.text)",
                                              timeout=0)
@@ -353,6 +356,8 @@ async def get_element_description(element, tag_name, role_value, type_value):
     if tag_name == "input" or tag_name == "textarea":
         if role_value not in none_input_type and type_value not in none_input_type:
             text1 = "input value="
+            #todo Locator.input_value - it sounds like this would be reproduced with HTMLInputElement.value (or perhaps HTMLElement.nodeValue??)
+            # https://playwright.dev/python/docs/next/api/class-locator#locator-input-value
             text2 = await element.input_value(timeout=0)
             if text2:
                 input_value = text1 + "\"" + text2 + "\"" + " "
@@ -366,6 +371,7 @@ async def get_element_description(element, tag_name, role_value, type_value):
             text_in = (text_content_in or '').strip()
             if text_in:
                 return input_value + remove_extra_eol(text_in)
+            #todo why are we completely skipping textContent if it's too long and innerText is empty? why not just truncate it?
         else:
             return input_value + text
 
@@ -391,8 +397,10 @@ async def get_element_description(element, tag_name, role_value, type_value):
             if attribute_value:
                 text1 += f"{attr}=" + "\"" + attribute_value.strip() + "\"" + " "
 
+        #if parent_value was non-empty, then wouldn't we have returned before looking at child elements?
         text = (parent_value + text1).strip()
         if text:
+            #why would a textarea or input have a child node?
             return input_value + remove_extra_eol(text.strip())
 
     return None
@@ -427,6 +435,7 @@ async def get_element_data(element, tag_name):
     if not description:
         return None
 
+    # https://developer.mozilla.org/en-US/docs/Web/API/Element/getBoundingClientRect
     rect = await element.bounding_box() or {'x': 0, 'y': 0, 'width': 0, 'height': 0}
 
     if role_value:
@@ -494,7 +503,7 @@ async def select_option(selector, value):
     return remove_extra_eol(best_option[1]).strip()
 
 
-#IN USE
+#IN USE but not relevant for extension, or at least not for its MVP
 def saveconfig(config, save_file):
     """
     config is a dictionary.
