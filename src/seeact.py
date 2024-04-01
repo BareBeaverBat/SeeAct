@@ -77,9 +77,13 @@ async def page_on_close_handler(page):
     if session_control.context:
         # if True:
         try:
+            #what was the point of this?
             await session_control.active_page.title()
             # print("Current active page: ", session_control.active_page)
         except:
+            #todo need to figure out how to port some of this logic to the chrome extension (or which parts to ignore)
+            # I think it's irrelevant, b/c the agent loop will be running in code in an injected content script,
+            # which would be running in the context of the page itself and so would die if the tab was closed
             await aprint("The active tab was closed. Will switch to the last page (or open a new default google page)")
             # print("All pages:")
             # print('-' * 10)
@@ -94,10 +98,8 @@ async def page_on_close_handler(page):
                 try:
                     await session_control.active_page.goto("https://www.google.com/", wait_until="load")
                 except Exception as e:
-                    #todo can we please log a warning about an error occurring during the loading of the google home page? or maybe an info or debug message about this?
                     pass
                 await aprint("Switched the active tab to: ", session_control.active_page.url)
-    #todo log a warning if context in session_control is not defined?
 
 
 async def page_on_navigatio_handler(frame):
@@ -106,10 +108,12 @@ async def page_on_navigatio_handler(frame):
     # print("The active tab is set to: ", frame.page.url)
 
 
+# https://playwright.dev/docs/api/class-page#page-event-crash
 async def page_on_crash_handler(page):
     await aprint("Page crashed:", page.url)
     await aprint("Try to reload")
     page.reload()
+    #todo? figure out how to port this? can't see how the js in the page could recover from the page as a whole crashing
 
 
 async def page_on_open_handler(page):
@@ -127,27 +131,6 @@ async def page_on_open_handler(page):
 
 
 async def main(config, base_dir) -> None:
-    # basic settings
-    is_demo = config["basic"]["is_demo"]
-    ranker_path = None
-    try:
-        ranker_path = config["basic"]["ranker_path"]
-        if not os.path.exists(ranker_path):
-            ranker_path = None
-    except:
-        pass
-
-    save_file_dir = os.path.join(base_dir, config["basic"]["save_file_dir"]) if not os.path.isabs(
-        config["basic"]["save_file_dir"]) else config["basic"]["save_file_dir"]
-    save_file_dir = os.path.abspath(save_file_dir)
-    default_task = config["basic"]["default_task"]
-    default_website = config["basic"]["default_website"]
-
-    # Experiment settings
-    task_file_path = os.path.join(base_dir, config["experiment"]["task_file_path"]) if not os.path.isabs(
-        config["experiment"]["task_file_path"]) else config["experiment"]["task_file_path"]
-    overwrite = config["experiment"]["overwrite"]
-    top_k = config["experiment"]["top_k"]
     fixed_choice_batch_size = config["experiment"]["fixed_choice_batch_size"]
     dynamic_choice_batch_size = config["experiment"]["dynamic_choice_batch_size"]
     max_continuous_no_op = config["experiment"]["max_continuous_no_op"]
@@ -155,449 +138,461 @@ async def main(config, base_dir) -> None:
     highlight = config["experiment"]["highlight"]
     monitor = config["experiment"]["monitor"]
     dev_mode = config["experiment"]["dev_mode"]
-
-    try:
-        storage_state = config["basic"]["storage_state"]
-    except:
-        storage_state = None
-
     # openai settings
     openai_config = config["openai"]
-    if openai_config["api_key"] == "Your API Key Here":
-        raise Exception(
-            f"Please set your GPT API key first. (in {os.path.join(base_dir, 'config', 'demo_mode.toml')} by default)")
-
-    # playwright settings
-    save_video = config["playwright"]["save_video"]
-    viewport_size = config["playwright"]["viewport"]
-    tracing = config["playwright"]["tracing"]
-    #todo what's special about locale and geolocation parts of the playwright settings?
-    locale = None
-    try:
-        locale = config["playwright"]["locale"]
-    except:
-        pass
-    geolocation = None
-    try:
-        geolocation = config["playwright"]["geolocation"]
-    except:
-        pass
-    trace_screenshots = config["playwright"]["trace"]["screenshots"]
-    trace_snapshots = config["playwright"]["trace"]["snapshots"]
-    trace_sources = config["playwright"]["trace"]["sources"]
 
     # Initialize Inference Engine based on OpenAI API
     generation_model = OpenaiEngine(**openai_config, )
 
-    # Load ranking model for prune candidate elements
-    ranking_model = None
-    if ranker_path:
-        #todo ide complains that CrossEncoder.device expects str, not object of pytorch type _C.device
-        ranking_model = CrossEncoder(ranker_path, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-                                     num_labels=1, max_length=512, )
+    task_input = await ainput(f"Please input a task, and press Enter.\nTask: ")
+    #I assume that, in the browser extension, the starting website will simply be whatever is open in the current tab
+    # set the folder name as current time
+    #todo browser code should also incorporate a task or run id based on timestamp at very start of run
+    # and put that in logs (can modify the augmentLogMsg() function)
+    # determine at start of content script (then put as global variable in window object)
+    file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    confirmed_task = task_input
+    task_id = file_name
 
-    if not is_demo:
-        with open(f'{task_file_path}', 'r', encoding='utf-8') as file:
-            query_tasks = json.load(file)
-    else:
-        query_tasks = []
-        task_dict = {}
-        task_input = await ainput(
-            f"Please input a task, and press Enter. \nOr directly press Enter to use the default task: {default_task}\nTask: ")
-        if not task_input:
-            task_input = default_task
-        task_dict["confirmed_task"] = task_input
-        #I assume that, in the browser extension, the starting website will simply be whatever is open in the current tab
-        website_input = await ainput(
-            "Please input the complete url of the starting website, and press Enter. "
-            "The URL must be complete (for example, including http), to ensure the browser can successfully load the webpage. "
-            f"\nOr directly press Enter to use the default website: {default_website}\nWebsite: ")
-        if not website_input:
-            website_input = default_website
-        task_dict["website"] = website_input
-        # set the folder name as current time
-        current_time = datetime.datetime.now()
-        file_name = current_time.strftime("%Y-%m-%d_%H-%M-%S")
-        task_dict["task_id"] = file_name
-        query_tasks.append(task_dict)
+    # init logger
+    logger = logging.getLogger(f"{task_id}")
+    logger.setLevel(logging.INFO)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    log_format = logging.Formatter('%(asctime)s - %(message)s')
+    console_handler.setFormatter(log_format)
+    logger.addHandler(console_handler)
+    if dev_mode:
+        logger.setLevel(logging.DEBUG)
 
-    #don't need to iterate over a collection of tasks in browser extension
-    for single_query_task in query_tasks:
-        confirmed_task = single_query_task["confirmed_task"]
-        confirmed_website = single_query_task["website"]
-        try:
-            confirmed_website_url = website_dict[confirmed_website]
-        except:
-            confirmed_website_url = confirmed_website
-        task_id = single_query_task["task_id"]
-        main_result_path = os.path.join(save_file_dir, task_id)
+    #todo debug logging about config choices (e.g. max op, monitor/dev flags)
 
-        if not os.path.exists(main_result_path):
-            os.makedirs(main_result_path)
-        else:
-            await aprint(f"{main_result_path} already exists")
-            if not overwrite:
-                continue
-                #is the idea that in this case the program skips actually running anything?
-                # if so, would it be good for it to tell the user that it's doing that?
-        saveconfig(config, os.path.join(main_result_path, "config.toml"))
+    logger.info(f"website: todo get website from current tab")
+    logger.info(f"task: {confirmed_task}")
+    logger.info(f"id: {task_id}")
+    #removing stuff related to initial page opening/loading b/c extension will be triggered when the target starting
+    # page is already loaded as the current tab
+    taken_actions = []
+    complete_flag = False
+    monitor_signal = ""
+    time_step = 0
+    no_op_count = 0
+    valid_op_count = 0
 
-        # init logger
-        # logger = await setup_logger(task_id, main_result_path)
-        logger = logging.getLogger(f"{task_id}")
-        logger.setLevel(logging.INFO)
-        log_fh = logging.FileHandler(os.path.join(main_result_path, f'{task_id}.log'), encoding='utf-8')
-        log_fh.setLevel(logging.INFO)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        log_format = logging.Formatter('%(asctime)s - %(message)s')
-        terminal_format = logging.Formatter('%(message)s')
-        log_fh.setFormatter(log_format)
-        console_handler.setFormatter(terminal_format)
-        logger.addHandler(log_fh)
-        logger.addHandler(console_handler)
+    while not complete_flag:
+        logger.debug(f"Page at the start: todo get url from curr tab")
+        log_separator_line(logger)
+        logger.info(f"Time step: {time_step}")
+        log_separator_line(logger)
+        elements = await get_interactive_elements_with_playwright(session_control.active_page)
 
-        logger.info(f"website: {confirmed_website_url}")
-        logger.info(f"task: {confirmed_task}")
-        logger.info(f"id: {task_id}")
-        async with async_playwright() as playwright:
-            session_control.browser = await normal_launch_async(playwright)
-            session_control.context = await normal_new_context_async(session_control.browser,
-                                                                     tracing=tracing,
-                                                                     storage_state=storage_state,
-                                                                     video_path=main_result_path if save_video else None,
-                                                                     viewport=viewport_size,
-                                                                     trace_screenshots=trace_screenshots,
-                                                                     trace_snapshots=trace_snapshots,
-                                                                     trace_sources=trace_sources,
-                                                                     geolocation=geolocation,
-                                                                     locale=locale)
-            session_control.context.on("page", page_on_open_handler)
-            await session_control.context.new_page()
-            try:
-                await session_control.active_page.goto(confirmed_website_url, wait_until="load")
-            except Exception as e:
-                logger.info("Failed to fully load the webpage before timeout")
-                logger.info(e)
-            await asyncio.sleep(3)
+        logger.info(f"# all interactive elements: {len(elements)}")
+        for i in elements:
+            logger.debug(i[1:])
+        time_step += 1
 
-            taken_actions = []
-            complete_flag = False
-            monitor_signal = ""
-            time_step = 0
-            no_op_count = 0
-            valid_op_count = 0
-
-            while not complete_flag:
-                if dev_mode:
-                    logger.info(f"Page at the start: {session_control.active_page}")
-                await session_control.active_page.bring_to_front()
-                terminal_width = 10
-                logger.info("=" * terminal_width)
-                logger.info(f"Time step: {time_step}")
-                logger.info('-' * 10)
-                elements = await get_interactive_elements_with_playwright(session_control.active_page)
-
-                if tracing:
-                    await session_control.context.tracing.start_chunk(title=f'{task_id}-Time Step-{time_step}',
-                                                                      name=f"{time_step}")
-                logger.info(f"# all elements: {len(elements)}")
-                if dev_mode:
-                    for i in elements:
-                        logger.info(i[1:])
-                time_step += 1
-
-                if len(elements) == 0:
-                    if monitor:
-                        logger.info(
-                            f"----------There is no element in this page. Do you want to terminate or continue after"
-                            f"human intervention? [i/e].\ni(Intervene): Reject this action, and pause for human "
-                            f"intervention.\ne(Exit): Terminate the program and save results.")
-                        monitor_input = await ainput()
-                        logger.info("Monitor Command: " + monitor_input)
-                        if monitor_input in ["i", "intervene", 'intervention']:
-                            logger.info(
-                                "Pause for human intervention. Press Enter to continue. You can also enter your message here, which will be included in the action history as a human message.")
-                            human_intervention = await ainput()
-                            if human_intervention:
-                                human_intervention = f"Human intervention with a message: {human_intervention}"
-                            else:
-                                human_intervention = f"Human intervention"
-                            taken_actions.append(human_intervention)
-                            continue
-
-                    logger.info("Terminate because there is no element in this page.")
-                    logger.info("Action History:")
-                    for action in taken_actions:
-                        logger.info(action)
-                    logger.info("")
-                    if tracing:
-                        logger.info("Save playwright trace file ")
-                        await session_control.context.tracing.stop_chunk(
-                            path=f"{os.path.join(main_result_path, 'playwright_traces', f'{time_step}.zip')}")
-
-                    logger.info(f"Write results to json file: {os.path.join(main_result_path, 'result.json')}")
-                    success_or_not = ""
-                    if valid_op_count == 0:
-                        success_or_not = "0"
-                    final_json = {"confirmed_task": confirmed_task, "website": confirmed_website,
-                                  "task_id": task_id, "success_or_not": success_or_not,
-                                  "num_step": len(taken_actions), "action_history": taken_actions,
-                                  "exit_by": "No elements"}
-
-                    with open(os.path.join(main_result_path, 'result.json'), 'w', encoding='utf-8') as file:
-                        json.dump(final_json, file, indent=4)
-                    # logger.shutdown()
-                    #
-                    # if monitor:
-                    #     logger.info("Wait for human inspection. Directly press Enter to exit")
-                    #     monitor_input = await ainput()
-                    logger.info("Close browser context")
-                    logger.removeHandler(log_fh)
-                    logger.removeHandler(console_handler)
-
-                    close_context = session_control.context
-                    session_control.context = None
-                    await close_context.close()
-                    complete_flag = True
+        if len(elements) == 0:
+            if monitor:
+                logger.info(
+                    f"----------There is no element in this page. Do you want to terminate or continue after"
+                    f"human intervention? [i/e].\ni(Intervene): Reject this action, and pause for human "
+                    f"intervention.\ne(Exit): Terminate the program and save results.")
+                monitor_input = await ainput()
+                logger.info("Monitor Command: " + monitor_input)
+                if monitor_input in ["i", "intervene", 'intervention']:
+                    logger.info(
+                        "Pause for human intervention. Press Enter to continue. You can also enter your message here, which will be included in the action history as a human message.")
+                    human_intervention = await ainput()
+                    if human_intervention:
+                        human_intervention = f"Human intervention with a message: {human_intervention}"
+                    else:
+                        human_intervention = f"Human intervention"
+                    taken_actions.append(human_intervention)
                     continue
-                if ranker_path and len(elements) > top_k:
-                    ranking_input = format_ranking_input(elements, confirmed_task, taken_actions)
-                    logger.info("Start to rank")
-                    pred_scores = ranking_model.predict(ranking_input, convert_to_numpy=True, show_progress_bar=False,
-                                                        batch_size=100, )
-                    topk_values, topk_indices = find_topk(pred_scores, k=min(top_k, len(elements)))
-                    all_candidate_ids = list(topk_indices)
-                    ranked_elements = [elements[i] for i in all_candidate_ids]
-                else:
 
-                    all_candidate_ids = range(len(elements))
-                    ranked_elements = elements
+            logger.info("Terminate because there is no interactive element in this page.")
+            #todo evaluate if this and code block from around line 700 can be consolidated into one section after the
+            # end of the while loop
+            logger.info("Action History:")#maybe simplify this and next 2 lines with "\n" + taken_actions.join("\n") concatenated to heading
+            for action in taken_actions:
+                logger.info(action)
+            # can simplify next 3 lines with ternary in final json spec
+            success_or_not = ""
+            if valid_op_count == 0:
+                success_or_not = "0"
+            final_json = {"confirmed_task": confirmed_task, "website": "todo get url from curr tab",
+                          "task_id": task_id, "success_or_not": success_or_not,
+                          "num_step": len(taken_actions), "action_history": taken_actions,
+                          "exit_by": "No elements"}
+            logger.info("Final JSON:" + json.dumps(final_json, indent=4))
+            continue
 
-                all_candidate_ids_with_location = []
-                for element_id, element_detail in zip(all_candidate_ids, ranked_elements):
-                    all_candidate_ids_with_location.append(
-                        (element_id, round(element_detail[0][1]), round(element_detail[0][0])))
+        all_candidate_ids = range(len(elements))
+        ranked_elements = elements
+        all_candidate_ids_with_location = []
+        for element_id, element_detail in zip(all_candidate_ids, ranked_elements):
+            all_candidate_ids_with_location.append(
+                (element_id, round(element_detail[0][1]), round(element_detail[0][0])))
 
-                all_candidate_ids_with_location.sort(key=lambda x: (x[1], x[2]))
+        all_candidate_ids_with_location.sort(key=lambda x: (x[1], x[2]))
+        all_candidate_ids = [element_id[0] for element_id in all_candidate_ids_with_location]
+        num_choices = len(all_candidate_ids)
+        total_height = await session_control.active_page.evaluate('''() => {
+                                                        return Math.max(
+                                                            document.documentElement.scrollHeight, 
+                                                            document.body.scrollHeight,
+                                                            document.documentElement.clientHeight
+                                                        );
+                                                    }''')
+        if dynamic_choice_batch_size > 0:
+            step_length = min(num_choices,
+                              num_choices // max(round(total_height / dynamic_choice_batch_size), 1) + 1)
+        else:
+            step_length = min(num_choices, fixed_choice_batch_size)
+        logger.info(f"batch size: {step_length}")
+        log_separator_line(logger)
 
-                all_candidate_ids = [element_id[0] for element_id in all_candidate_ids_with_location]
-                num_choices = len(all_candidate_ids)
-                if ranker_path:
-                    logger.info(f"# element candidates: {num_choices}")
+        total_width = session_control.active_page.viewport_size["width"]
+        logger.info("You are asked to complete the following task: " + confirmed_task)
+        previous_actions = taken_actions
 
-                total_height = await session_control.active_page.evaluate('''() => {
-                                                                return Math.max(
-                                                                    document.documentElement.scrollHeight, 
-                                                                    document.body.scrollHeight,
-                                                                    document.documentElement.clientHeight
-                                                                );
-                                                            }''')
-                if dynamic_choice_batch_size > 0:
-                    step_length = min(num_choices,
-                                      num_choices // max(round(total_height / dynamic_choice_batch_size), 1) + 1)
-                else:
-                    step_length = min(num_choices, fixed_choice_batch_size)
-                logger.info(f"batch size: {step_length}")
-                logger.info('-' * 10)
+        previous_action_text = "Previous Actions:\n"
+        if previous_actions is None or previous_actions == []:## can simplify this if block with nullish coalescing
+            previous_actions = ["None"]
+        for action_text in previous_actions:#can simplify next 4 lines using 1 concat and string join or equivalent
+            previous_action_text += action_text
+            previous_action_text += "\n"
+        logger.info(previous_action_text[:-1])
 
-                total_width = session_control.active_page.viewport_size["width"]
-                log_task = "You are asked to complete the following task: " + confirmed_task
-                logger.info(log_task)
-                previous_actions = taken_actions
+        target_element = []#various bits of info about the target element
+        new_action = ""
+        # todo is there a reason to have a default action like this? don't we treat the round as a no-op
+        #  if the llm didn't spit out a valid action name?
+        target_action = "CLICK"
+        target_value = ""
+        query_count = 0
+        #todo isn't this boolean flag redundant? either branch which sets it will also put a non-empty value in
+        # target_action (this reasoning would only work if target_action stops having a default value of CLICK)
+        got_one_answer = False
 
-                previous_action_text = "Previous Actions:\n"
-                if previous_actions is None or previous_actions == []:
-                    previous_actions = ["None"]
-                for action_text in previous_actions:
-                    previous_action_text += action_text
-                    previous_action_text += "\n"
+        #todo at least 1 separate method for element selection, with it also possibly split into sub-methods
+        # block is ~100 lines long
+        for multichoice_i in range(0, num_choices, step_length):
+            logger.info("-" * 10)
+            logger.info(f"Start Multi-Choice QA - Batch {multichoice_i // step_length}")
 
-                log_previous_actions = previous_action_text
-                logger.info(log_previous_actions[:-1])
+            height_start = all_candidate_ids_with_location[multichoice_i][1]
+            height_end = all_candidate_ids_with_location[min(multichoice_i + step_length, num_choices) - 1][1]
+            total_height = await session_control.active_page.evaluate('''() => {
+                                                            return Math.max(
+                                                                document.documentElement.scrollHeight, 
+                                                                document.body.scrollHeight,
+                                                                document.documentElement.clientHeight);
+                                                        }''')
+            clip_start = min(total_height - 1144, max(0, height_start - 200))
+            clip_height = min(total_height - clip_start, max(height_end - height_start + 200, 1144))
+            clip = {"x": 0, "y": clip_start, "width": total_width, "height": clip_height}
 
-                target_element = []
+            logger.debug(height_start)
+            logger.debug(height_end)
+            logger.debug(total_height)
+            logger.debug(clip)
+            logger.debug(multichoice_i)
+            candidate_ids = all_candidate_ids[multichoice_i:multichoice_i + step_length]
+            choices = format_choices(elements, candidate_ids, confirmed_task, taken_actions)
+            query_count += 1
+            # Format prompts for LLM inference
+            prompt = generate_prompt(task=confirmed_task, previous=taken_actions, choices=choices,
+                                     experiment_split="SeeAct")
+            for prompt_i in prompt:
+                logger.debug(prompt_i)
 
-                new_action = ""
-                target_action = "CLICK"
-                target_value = ""
-                query_count = 0
-                got_one_answer = False
+            output0 = generation_model.generate(prompt=prompt, image_path="will be data url, not file path", turn_number=0)
+            log_separator_line(logger)
+            logger.debug("🤖Action Generation Output🤖")
+            # why can't the entire output (containing newlines) simply be passed to the logger at once?
+            for line in output0.split('\n'):
+                logger.info(line)
+            log_separator_line(logger)
 
-                for multichoice_i in range(0, num_choices, step_length):
-                    logger.info("-" * 10)
-                    logger.info(f"Start Multi-Choice QA - Batch {multichoice_i // step_length}")
-                    input_image_path = os.path.join(main_result_path, 'image_inputs',
-                                                    f'{time_step}_{multichoice_i // step_length}_crop.jpg')
+            choice_text = f"(Multichoice Question) - Batch {multichoice_i // step_length}" + "\n" + format_options(choices)
+            choice_text = choice_text.replace("\n\n", "")#why?
+            for line in choice_text.split('\n'):
+                logger.info(line)
+            # why can't the entire output (containing newlines) simply be passed to the logger at once?
 
-                    height_start = all_candidate_ids_with_location[multichoice_i][1]
-                    height_end = all_candidate_ids_with_location[min(multichoice_i + step_length, num_choices) - 1][1]
+            output = generation_model.generate(prompt=prompt, image_path="will be data url, not file path", turn_number=1,
+                                               ouput__0=output0)
+            log_separator_line(logger)
+            logger.info("🤖Grounding Output🤖")
+            # why can't the entire output (containing newlines) simply be passed to the logger at once?
+            for line in output.split('\n'):
+                logger.info(line)
+            pred_element, pred_action, pred_value = postprocess_action_lmm(output)
+            #todo can simplify this code by modifying get_index_from_option_name so that,  if input is bad,
+            # it returns -1 rather than throwing
+            if len(pred_element) in [1, 2]:
+                element_id = get_index_from_option_name(pred_element)
+            else:
+                element_id = -1
 
-                    total_height = await session_control.active_page.evaluate('''() => {
-                                                                    return Math.max(
-                                                                        document.documentElement.scrollHeight, 
-                                                                        document.body.scrollHeight,
-                                                                        document.documentElement.clientHeight
-                                                                    );
-                                                                }''')
-                    clip_start = min(total_height - 1144, max(0, height_start - 200))
-                    clip_height = min(total_height - clip_start, max(height_end - height_start + 200, 1144))
-                    clip = {"x": 0, "y": clip_start, "width": total_width, "height": clip_height}
+            # Process the elements
+            if (0 <= element_id < len(candidate_ids) and pred_action.strip() in ["CLICK", "SELECT", "TYPE",
+                                                                                 "PRESS ENTER", "HOVER",
+                                                                                 "TERMINATE"]):
+                target_element = elements[int(choices[element_id][0])]
+                target_element_text = choices[element_id][1]
+                target_action = pred_action
+                target_value = pred_value
+                new_action += "[" + target_element[2] + "]" + " "
+                new_action += target_element[1] + " -> " + target_action
+                if target_action.strip() in ["SELECT", "TYPE"]:
+                    new_action += ": " + target_value
+                got_one_answer = True
+                break
+            elif pred_action.strip() in ["PRESS ENTER", "TERMINATE"]:
+                target_element = pred_action
+                target_element_text = target_element
+                target_action = pred_action
+                target_value = pred_value
+                new_action += target_action
+                if target_action.strip() in ["SELECT", "TYPE"]:
+                    new_action += ": " + target_value
+                got_one_answer = True
+                break
+            else:
+                pass
 
-                    if dev_mode:
-                        logger.info(height_start)
-                        logger.info(height_end)
-                        logger.info(total_height)
-                        logger.info(clip)
+        if got_one_answer:
+            log_separator_line(logger)
+            logger.info("🤖Browser Operation🤖")
+            logger.info(f"Target Element: {target_element_text}", )
+            logger.info(f"Target Action: {target_action}", )
+            logger.info(f"Target Value: {target_value}", )
 
-                    try:
-                        await session_control.active_page.screenshot(path=input_image_path, clip=clip, full_page=True,
-                                                                     type='jpeg', quality=100, timeout=20000)
-                    except Exception as e_clip:
-                        logger.info(f"Failed to get cropped screenshot because {e_clip}")
-
-                    if dev_mode:
-                        logger.info(multichoice_i)
-                    if not os.path.exists(input_image_path):
-                        if dev_mode:
-                            logger.info("No screenshot")
-                        continue
-                    candidate_ids = all_candidate_ids[multichoice_i:multichoice_i + step_length]
-                    choices = format_choices(elements, candidate_ids, confirmed_task, taken_actions)
-                    query_count += 1
-                    # Format prompts for LLM inference
-                    prompt = generate_prompt(task=confirmed_task, previous=taken_actions, choices=choices,
-                                             experiment_split="SeeAct")
-                    if dev_mode:
-                        for prompt_i in prompt:
-                            logger.info(prompt_i)
-
-                    output0 = generation_model.generate(prompt=prompt, image_path=input_image_path, turn_number=0)
-
-                    terminal_width = 10
-                    logger.info("-" * terminal_width)
-                    logger.info("🤖Action Generation Output🤖")
-
-                    # logger.info(output0)
-
-                    for line in output0.split('\n'):
-                        logger.info(line)
-
-                    terminal_width = 10
-                    logger.info("-" * (terminal_width))
-
-                    choice_text = f"(Multichoice Question) - Batch {multichoice_i // step_length}" + "\n" + format_options(
-                        choices)
-                    choice_text = choice_text.replace("\n\n", "")
-
-                    for line in choice_text.split('\n'):
-                        logger.info(line)
-                    # logger.info(choice_text)
-
-                    output = generation_model.generate(prompt=prompt, image_path=input_image_path, turn_number=1,
-                                                       ouput__0=output0)
-
-                    terminal_width = 10
-                    logger.info("-" * terminal_width)
-                    logger.info("🤖Grounding Output🤖")
-
-                    for line in output.split('\n'):
-                        logger.info(line)
-                    # logger.info(output)
-                    pred_element, pred_action, pred_value = postprocess_action_lmm(output)
-                    if len(pred_element) in [1, 2]:
-                        element_id = get_index_from_option_name(pred_element)
-                    else:
-                        element_id = -1
-
-                    # Process the elements
-                    if (0 <= element_id < len(candidate_ids) and pred_action.strip() in ["CLICK", "SELECT", "TYPE",
-                                                                                         "PRESS ENTER", "HOVER",
-                                                                                         "TERMINATE"]):
-                        target_element = elements[int(choices[element_id][0])]
-                        target_element_text = choices[element_id][1]
-                        target_action = pred_action
-                        target_value = pred_value
-                        new_action += "[" + target_element[2] + "]" + " "
-                        new_action += target_element[1] + " -> " + target_action
-                        if target_action.strip() in ["SELECT", "TYPE"]:
-                            new_action += ": " + target_value
-                        got_one_answer = True
-                        break
-                    elif pred_action.strip() in ["PRESS ENTER", "TERMINATE"]:
-                        target_element = pred_action
-                        target_element_text = target_element
-                        target_action = pred_action
-                        target_value = pred_value
-                        new_action += target_action
-                        if target_action.strip() in ["SELECT", "TYPE"]:
-                            new_action += ": " + target_value
-                        got_one_answer = True
-                        break
-                    else:
-                        pass
-
-                if got_one_answer:
-                    terminal_width = 10
-                    logger.info("-" * terminal_width)
-                    logger.info("🤖Browser Operation🤖")
-                    logger.info(f"Target Element: {target_element_text}", )
-                    logger.info(f"Target Action: {target_action}", )
-                    logger.info(f"Target Value: {target_value}", )
-
-                    if monitor:
-                        logger.info(
-                            f"----------\nShould I execute the above action? [Y/n/i/e].\nY/n: Accept or reject this action.\ni(Intervene): Reject this action, and pause for human intervention.\ne(Exit): Terminate the program and save results.")
-                        monitor_input = await ainput()
-                        logger.info("Monitor Command: " + monitor_input)
-                        if monitor_input in ["n", "N", "No", "no"]:
-                            monitor_signal = "reject"
-                            target_element = []
-                        elif monitor_input in ["e", "exit", "Exit"]:
-                            monitor_signal = "exit"
-                        elif monitor_input in ["i", "intervene", 'intervention']:
-                            monitor_signal = "pause"
-                            target_element = []
-                        else:
-                            valid_op_count += 1
-                else:
-                    no_op_count += 1
+            if monitor:
+                logger.info(
+                    f"----------\nShould I execute the above action? [Y/n/i/e].\nY/n: Accept or reject this action.\ni(Intervene): Reject this action, and pause for human intervention.\ne(Exit): Terminate the program and save results.")
+                monitor_input = await ainput()
+                logger.info("Monitor Command: " + monitor_input)
+                if monitor_input in ["n", "N", "No", "no"]:
+                    monitor_signal = "reject"
                     target_element = []
+                elif monitor_input in ["e", "exit", "Exit"]:
+                    monitor_signal = "exit"
+                elif monitor_input in ["i", "intervene", 'intervention']:
+                    monitor_signal = "pause"
+                    target_element = []
+                else:
+                    valid_op_count += 1
+        else:
+            no_op_count += 1
+            target_element = []
 
-                try:
-                    if monitor_signal == 'exit':
-                        raise Exception("human supervisor manually made it exit.")
-                    if no_op_count >= max_continuous_no_op:
-                        raise Exception(f"no executable operations for {max_continuous_no_op} times.")
-                    elif time_step >= max_op:
-                        raise Exception(f"the agent reached the step limit {max_op}.")
-                    elif target_action == "TERMINATE":
-                        raise Exception("The model determined a completion.")
+        try:
+            if monitor_signal == 'exit':
+                raise Exception("human supervisor manually made it exit.")
+            if no_op_count >= max_continuous_no_op:
+                raise Exception(f"no executable operations for {max_continuous_no_op} times.")
+            elif time_step >= max_op:
+                raise Exception(f"the agent reached the step limit {max_op}.")
+            elif target_action == "TERMINATE":
+                raise Exception("The model determined a completion.")
 
-                    # Perform browser action with PlayWright
-                    # The code is complex to handle all kinds of cases in execution
-                    # It's ugly, but it works, so far
-                    selector = None
-                    fail_to_execute = False
-                    try:
-                        if target_element == []:
+            # Perform browser action with PlayWright
+            # The code is complex to handle all kinds of cases in execution
+            # It's ugly, but it works, so far
+            selector = None
+            fail_to_execute = False
+            try:
+                if target_element == []:
+                    pass
+                else:
+                    if not target_element in ["PRESS ENTER", "TERMINATE"]:
+                        selector = target_element[-2]
+                        logger.debug(target_element)
+                        try:
+                            #todo how to scroll to element in js?
+                            await selector.scroll_into_view_if_needed(timeout=3000)
+                            if highlight:
+                                #todo how to highlight element with js?
+                                # https://playwright.dev/docs/api/class-locator#locator-highlight
+                                # docs say not to commit code that uses this function?
+                                # what does it even do (as distinct from hover)?
+                                await selector.highlight()
+                                await asyncio.sleep(2.5)
+                        except Exception as e:
                             pass
-                        else:
-                            if not target_element in ["PRESS ENTER", "TERMINATE"]:
-                                selector = target_element[-2]
-                                if dev_mode:
-                                    logger.info(target_element)
-                                try:
-                                    await selector.scroll_into_view_if_needed(timeout=3000)
-                                    if highlight:
-                                        await selector.highlight()
-                                        await asyncio.sleep(2.5)
-                                except Exception as e:
-                                    pass
 
-                        if selector:
-                            valid_op_count += 1
-                            if target_action == "CLICK":
+                #todo consider implementing in js a conditional polling/wait for 'stability'
+                # https://playwright.dev/docs/actionability#stable
+                #todo might also need to implement a 'receives events' polling check
+                # https://playwright.dev/docs/actionability#receives-events
+                #todo note that a given action type would only need some of the actionability checks
+                # https://playwright.dev/docs/actionability#introduction
+                #todo above goals for conditional polling/waiting could be one (or a few) helper methods
+
+                # todo after chat with Boyuan to clarify questions in below big block, figure out how to break it up
+                if selector:
+                    valid_op_count += 1
+                    if target_action == "CLICK":
+                        js_click = True
+                        try:
+                            if target_element[-1] in ["select", "input"]:
+                                logger.info("Try performing a CLICK")
+                                await selector.evaluate("element => element.click()", timeout=10000)
+                                js_click = False
+                            else:
+                                #todo this automatically does a scroll-to-element
+                                # also need special tricks to approximately simulate click-at-coordinates with js
+                                # https://stackoverflow.com/questions/3277369/how-to-simulate-a-click-by-using-x-y-coordinates-in-javascript
+                                # https://javascript.plainenglish.io/how-to-simulate-a-click-by-using-x-y-coordinates-in-javascript-82b745e4a6b1
+                                await selector.click(timeout=10000)
+                        except Exception as e:
+                            try:
+                                if not js_click:
+                                    logger.info("Try performing a CLICK")
+                                    await selector.evaluate("element => element.click()", timeout=10000)
+                                else:
+                                    raise Exception(e)
+                            except Exception as ee:
+                                try:
+                                    logger.info("Try performing a HOVER")
+                                    await selector.hover(timeout=10000)
+                                    # for hover/mouseover: https://stackoverflow.com/a/50206746/10808625
+                                    new_action = new_action.replace("CLICK",
+                                                                    f"Failed to CLICK because {e}, did a HOVER instead")
+                                except Exception as eee:
+                                    new_action = new_action.replace("CLICK", f"Failed to CLICK because {e}")
+                                    no_op_count += 1
+                    elif target_action == "TYPE":
+                        try:
+                            try:
+                                logger.info("Try performing a \"press_sequentially\"")
+                                await selector.clear(timeout=10000)# js can set element.value to empty string
+                                await selector.fill("", timeout=10000)
+                                #why are we filling with empty string after we already cleared it?
+                                await selector.press_sequentially(target_value, timeout=10000)
+                                #todo ask Boyuan why we're using press_sequentially instead of fill
+                            except Exception as e0:
+                                await selector.fill(target_value, timeout=10000)
+                        except Exception as e:
+                            try:
+                                #can we please check whether it's a select before trying to type into it?
+                                # or does this typing work sometimes?
+                                if target_element[-1] in ["select"]:
+                                    logger.info("Try performing a SELECT")
+                                    selected_value = await select_option(selector, target_value)
+                                    new_action = new_action.replace("TYPE",
+                                                                    f"Failed to TYPE \"{target_value}\" because {e}, did a SELECT {selected_value} instead")
+                                else:
+                                    raise Exception(e)
+                            except Exception as ee:
+                                #does this variable mean "we haven't completed an attempt at a js click yet"?
+                                # if so, why do we only try clicking again in an except block if we had already clicked?
+                                js_click = True
+                                try:
+                                    if target_element[-1] in ["select", "input"]:
+                                        logger.info("Try performing a CLICK")
+                                        await selector.evaluate("element => element.click()", timeout=10000)
+                                        js_click = False
+                                    else:
+                                        logger.info("Try performing a CLICK")
+                                        await selector.click(timeout=10000)
+                                    new_action = "[" + target_element[2] + "]" + " "
+                                    new_action += target_element[
+                                                      1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a CLICK instead"
+                                except Exception as eee:
+                                    try:
+                                        if not js_click:
+                                            logger.debug(eee)
+                                            logger.info("Try performing a CLICK")
+                                            await selector.evaluate("element => element.click()", timeout=10000)
+                                            new_action = "[" + target_element[2] + "]" + " "
+                                            new_action += target_element[
+                                                              1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a CLICK instead"
+                                        else:
+                                            raise Exception(eee)
+                                    except Exception as eeee:
+                                        try:
+                                            #very confused, why are we doing a hover as the absolute last resort only for the TYPE action?
+                                            logger.info("Try performing a HOVER")
+                                            await selector.hover(timeout=10000)
+                                            new_action = "[" + target_element[2] + "]" + " "
+                                            new_action += target_element[
+                                                              1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a HOVER instead"
+                                        except Exception as eee:
+                                            new_action = "[" + target_element[2] + "]" + " "
+                                            new_action += target_element[
+                                                              1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}"
+                                            no_op_count += 1
+                    elif target_action == "SELECT":
+                        try:
+                            logger.info("Try performing a SELECT")
+                            selected_value = await select_option(selector, target_value)
+                            new_action = new_action.replace(f"{target_value}", f"{selected_value}")
+                        except Exception as e:
+                            try:
+                                #there are cases where the action type is SELECT but the element is an input??
+                                if target_element[-1] in ["input"]:
+                                    try:
+                                        logger.info("Try performing a \"press_sequentially\"")
+                                        await selector.clear(timeout=10000)
+                                        await selector.fill("", timeout=10000)
+                                        await selector.press_sequentially(target_value, timeout=10000)
+                                    except Exception as e0:
+                                        await selector.fill(target_value, timeout=10000)
+                                    new_action = new_action.replace("SELECT",
+                                                                    f"Failed to SELECT \"{target_value}\" because {e}, did a TYPE instead")
+                                else:
+                                    raise Exception(e)
+                            except Exception as ee:
+                                js_click = True
+                                try:
+                                    if target_element[-1] in ["select", "input"]:
+                                        logger.info("Try performing a CLICK")
+                                        await selector.evaluate("element => element.click()", timeout=10000)
+                                        js_click = False
+                                        #why are we doing js click for select and input elements but the playwright
+                                        # click for others (in the scenario where the action name is SELECT)?
+                                    else:
+
+                                        await selector.click(timeout=10000)
+                                    new_action = "[" + target_element[2] + "]" + " "
+                                    new_action += target_element[
+                                                      1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}, did a CLICK instead"
+                                except Exception as eee:
+                                    try:
+                                        if not js_click:
+                                            logger.info("Try performing a CLICK")
+                                            await selector.evaluate("element => element.click()", timeout=10000)
+                                            new_action = "[" + target_element[2] + "]" + " "
+                                            new_action += target_element[
+                                                              1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}, did a CLICK instead"
+                                        else:
+                                            raise Exception(eee)
+                                    except Exception as eeee:
+                                        try:
+                                            logger.info("Try performing a HOVER")
+                                            await selector.hover(timeout=10000)
+                                            new_action = "[" + target_element[2] + "]" + " "
+                                            new_action += target_element[
+                                                              1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}, did a HOVER instead"
+                                        except Exception as eee:
+                                            new_action = "[" + target_element[2] + "]" + " "
+                                            new_action += target_element[
+                                                              1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}"
+                                            no_op_count += 1
+                    elif target_action == "HOVER":
+                        try:
+                            logger.info("Try performing a HOVER")
+                            await selector.hover(timeout=10000)
+                        except Exception as e:
+                            try:
+                                await selector.click(timeout=10000)
+                                new_action = new_action.replace("HOVER",
+                                                                f"Failed to HOVER because {e}, did a CLICK instead")
+                            except:
                                 js_click = True
                                 try:
                                     if target_element[-1] in ["select", "input"]:
@@ -606,274 +601,119 @@ async def main(config, base_dir) -> None:
                                         js_click = False
                                     else:
                                         await selector.click(timeout=10000)
-                                except Exception as e:
+                                    new_action = "[" + target_element[2] + "]" + " "
+                                    new_action += target_element[
+                                                      1] + " -> " + f"Failed to HOVER because {e}, did a CLICK instead"
+                                except Exception as eee:
                                     try:
                                         if not js_click:
                                             logger.info("Try performing a CLICK")
                                             await selector.evaluate("element => element.click()", timeout=10000)
-                                        else:
-                                            raise Exception(e)
-                                    except Exception as ee:
-                                        try:
-                                            logger.info("Try performing a HOVER")
-                                            await selector.hover(timeout=10000)
-                                            new_action = new_action.replace("CLICK",
-                                                                            f"Failed to CLICK because {e}, did a HOVER instead")
-                                        except Exception as eee:
-                                            new_action = new_action.replace("CLICK", f"Failed to CLICK because {e}")
-                                            no_op_count += 1
-                            elif target_action == "TYPE":
-                                try:
-                                    try:
-                                        logger.info("Try performing a \"press_sequentially\"")
-                                        await selector.clear(timeout=10000)
-                                        await selector.fill("", timeout=10000)
-                                        await selector.press_sequentially(target_value, timeout=10000)
-                                    except Exception as e0:
-                                        await selector.fill(target_value, timeout=10000)
-                                except Exception as e:
-                                    try:
-                                        if target_element[-1] in ["select"]:
-                                            logger.info("Try performing a SELECT")
-                                            selected_value = await select_option(selector, target_value)
-                                            new_action = new_action.replace("TYPE",
-                                                                            f"Failed to TYPE \"{target_value}\" because {e}, did a SELECT {selected_value} instead")
-                                        else:
-                                            raise Exception(e)
-                                    except Exception as ee:
-                                        js_click = True
-                                        try:
-                                            if target_element[-1] in ["select", "input"]:
-                                                logger.info("Try performing a CLICK")
-                                                await selector.evaluate("element => element.click()", timeout=10000)
-                                                js_click = False
-                                            else:
-                                                logger.info("Try performing a CLICK")
-                                                await selector.click(timeout=10000)
-                                            new_action = "[" + target_element[2] + "]" + " "
-                                            new_action += target_element[
-                                                              1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a CLICK instead"
-                                        except Exception as eee:
-                                            try:
-                                                if not js_click:
-                                                    if dev_mode:
-                                                        logger.info(eee)
-                                                    logger.info("Try performing a CLICK")
-                                                    await selector.evaluate("element => element.click()", timeout=10000)
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a CLICK instead"
-                                                else:
-                                                    raise Exception(eee)
-                                            except Exception as eeee:
-                                                try:
-                                                    logger.info("Try performing a HOVER")
-                                                    await selector.hover(timeout=10000)
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a HOVER instead"
-                                                except Exception as eee:
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}"
-                                                    no_op_count += 1
-                            elif target_action == "SELECT":
-                                try:
-                                    logger.info("Try performing a SELECT")
-                                    selected_value = await select_option(selector, target_value)
-                                    new_action = new_action.replace(f"{target_value}", f"{selected_value}")
-                                except Exception as e:
-                                    try:
-                                        if target_element[-1] in ["input"]:
-                                            try:
-                                                logger.info("Try performing a \"press_sequentially\"")
-                                                await selector.clear(timeout=10000)
-                                                await selector.fill("", timeout=10000)
-                                                await selector.press_sequentially(target_value, timeout=10000)
-                                            except Exception as e0:
-                                                await selector.fill(target_value, timeout=10000)
-                                            new_action = new_action.replace("SELECT",
-                                                                            f"Failed to SELECT \"{target_value}\" because {e}, did a TYPE instead")
-                                        else:
-                                            raise Exception(e)
-                                    except Exception as ee:
-                                        js_click = True
-                                        try:
-                                            if target_element[-1] in ["select", "input"]:
-                                                logger.info("Try performing a CLICK")
-                                                await selector.evaluate("element => element.click()", timeout=10000)
-                                                js_click = False
-                                            else:
-                                                await selector.click(timeout=10000)
-                                            new_action = "[" + target_element[2] + "]" + " "
-                                            new_action += target_element[
-                                                              1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}, did a CLICK instead"
-                                        except Exception as eee:
-
-                                            try:
-                                                if not js_click:
-                                                    logger.info("Try performing a CLICK")
-                                                    await selector.evaluate("element => element.click()", timeout=10000)
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}, did a CLICK instead"
-                                                else:
-                                                    raise Exception(eee)
-                                            except Exception as eeee:
-                                                try:
-                                                    logger.info("Try performing a HOVER")
-                                                    await selector.hover(timeout=10000)
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}, did a HOVER instead"
-                                                except Exception as eee:
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to SELECT \"{target_value}\" because {e}"
-                                                    no_op_count += 1
-                            elif target_action == "HOVER":
-                                try:
-                                    logger.info("Try performing a HOVER")
-                                    await selector.hover(timeout=10000)
-                                except Exception as e:
-                                    try:
-                                        await selector.click(timeout=10000)
-                                        new_action = new_action.replace("HOVER",
-                                                                        f"Failed to HOVER because {e}, did a CLICK instead")
-                                    except:
-                                        js_click = True
-                                        try:
-                                            if target_element[-1] in ["select", "input"]:
-                                                logger.info("Try performing a CLICK")
-                                                await selector.evaluate("element => element.click()", timeout=10000)
-                                                js_click = False
-                                            else:
-                                                await selector.click(timeout=10000)
                                             new_action = "[" + target_element[2] + "]" + " "
                                             new_action += target_element[
                                                               1] + " -> " + f"Failed to HOVER because {e}, did a CLICK instead"
-                                        except Exception as eee:
-                                            try:
-                                                if not js_click:
-                                                    logger.info("Try performing a CLICK")
-                                                    await selector.evaluate("element => element.click()", timeout=10000)
-                                                    new_action = "[" + target_element[2] + "]" + " "
-                                                    new_action += target_element[
-                                                                      1] + " -> " + f"Failed to HOVER because {e}, did a CLICK instead"
-                                                else:
-                                                    raise Exception(eee)
-                                            except Exception as eeee:
-                                                new_action = "[" + target_element[2] + "]" + " "
-                                                new_action += target_element[
-                                                                  1] + " -> " + f"Failed to HOVER because {e}"
-                                                no_op_count += 1
-                            elif target_action == "PRESS ENTER":
-                                try:
-                                    logger.info("Try performing a PRESS ENTER")
-                                    await selector.press('Enter')
-                                except Exception as e:
-                                    await selector.click(timeout=10000)
-                                    await session_control.active_page.keyboard.press('Enter')
-                        elif monitor_signal == "pause":
-                            logger.info(
-                                "Pause for human intervention. Press Enter to continue. You can also enter your message here, which will be included in the action history as a human message.")
-                            human_intervention = await ainput()
-                            if human_intervention:
-                                human_intervention = f" Human message: {human_intervention}"
-                            raise Exception(
-                                f"the human supervisor rejected this operation and may have taken some actions.{human_intervention}")
-                        elif monitor_signal == "reject":
-                            raise Exception("the human supervisor rejected this operation.")
-                        elif target_element == "PRESS ENTER":
+                                        else:
+                                            raise Exception(eee)
+                                    except Exception as eeee:
+                                        new_action = "[" + target_element[2] + "]" + " "
+                                        new_action += target_element[
+                                                          1] + " -> " + f"Failed to HOVER because {e}"
+                                        no_op_count += 1
+                    elif target_action == "PRESS ENTER":
+                        try:
                             logger.info("Try performing a PRESS ENTER")
+                            await selector.press('Enter')
+                            #todo need to e2e test the js code that replaces this
+                            # https://www.shecodes.io/athena/72484-how-to-simulate-pressing-the-enter-key-in-javascript
+                            # https://playwright.dev/docs/api/class-locator#locator-press
+                        except Exception as e:
+                            await selector.click(timeout=10000)
                             await session_control.active_page.keyboard.press('Enter')
-                        no_op_count = 0
-                        try:
-                            await session_control.active_page.wait_for_load_state('load')
-                        except Exception as e:
-                            pass
-                    except Exception as e:
-                        if target_action not in ["TYPE", "SELECT"]:
-                            new_action = f"Failed to {target_action} {target_element_text} because {e}"
-
-                        else:
-                            new_action = f"Failed to {target_action} {target_value} for {target_element_text} because {e}"
-                        fail_to_execute = True
-
-                    if new_action == "" or fail_to_execute:
-                        if new_action == "":
-                            new_action = "No Operation"
-                        if monitor_signal not in ["pause", "reject"]:
-                            no_op_count += 1
-                    taken_actions.append(new_action)
-                    if not session_control.context.pages:
-                        await session_control.context.new_page()
-                        try:
-                            await session_control.active_page.goto(confirmed_website_url, wait_until="load")
-                        except Exception as e:
-                            pass
-
-                    if monitor_signal == 'pause':
-                        pass
-                    else:
-                        await asyncio.sleep(3)
-                    if dev_mode:
-                        logger.info(f"current active page: {session_control.active_page}")
-
-                        # await session_control.context.new_page()
-                        # try:
-                        #     await session_control.active_page.goto("https://www.bilibili.com/", wait_until="load")
-                        # except Exception as e:
-                        #     pass
-                        logger.info("All pages")
-                        logger.info(session_control.context.pages)
-                        logger.info("-" * 10)
-                    try:
-                        await session_control.active_page.wait_for_load_state('load')
-                    except Exception as e:
-                        if dev_mode:
-                            logger.info(e)
-                    if tracing:
-                        logger.info("Save playwright trace file")
-                        await session_control.context.tracing.stop_chunk(
-                            path=f"{os.path.join(main_result_path, 'playwright_traces', f'{time_step}.zip')}")
+                            #https://playwright.dev/docs/api/class-keyboard#keyboard-press
+                            # how does this differ from locator.press()? not sure how to replicate this as separate
+                            # thing in js
+                elif monitor_signal == "pause":
+                    logger.info(
+                        "Pause for human intervention. Press Enter to continue. You can also enter your message here, which will be included in the action history as a human message.")
+                    human_intervention = await ainput()
+                    if human_intervention:
+                        human_intervention = f" Human message: {human_intervention}"
+                    raise Exception(
+                        f"the human supervisor rejected this operation and may have taken some actions.{human_intervention}")
+                elif monitor_signal == "reject":
+                    raise Exception("the human supervisor rejected this operation.")
+                elif target_element == "PRESS ENTER":#wth? the element is PRESS ENTER???
+                    logger.info("Try performing a PRESS ENTER")
+                    await session_control.active_page.keyboard.press('Enter')
+                no_op_count = 0#why are we resetting the no op count here?
+                try:
+                    await session_control.active_page.wait_for_load_state('load')
+                    # https://stackoverflow.com/questions/1033398/how-to-execute-a-function-when-page-has-fully-loaded
                 except Exception as e:
-                    logger.info("=" * 10)
-                    logger.info(f"Decide to terminate because {e}")
-                    logger.info("Action History:")
+                    pass
+            except Exception as e:
+                if target_action not in ["TYPE", "SELECT"]:
+                    new_action = f"Failed to {target_action} {target_element_text} because {e}"
+                else:
+                    new_action = f"Failed to {target_action} {target_value} for {target_element_text} because {e}"
+                fail_to_execute = True
 
-                    for action in taken_actions:
-                        logger.info(action)
-                    logger.info("")
+            if new_action == "" or fail_to_execute:
+                if new_action == "":
+                    new_action = "No Operation"
+                if monitor_signal not in ["pause", "reject"]:
+                    no_op_count += 1
+            taken_actions.append(new_action)
+            if not session_control.context.pages:
+                await session_control.context.new_page()
+                try:
+                    #todo ask if should just cut this, not sure how it would be relevant in non-playwright context
+                    await session_control.active_page.goto("starting url??", wait_until="load")
+                except Exception as e:
+                    pass
 
-                    if tracing:
-                        logger.info("Save playwright trace file")
-                        await session_control.context.tracing.stop_chunk(
-                            path=f"{os.path.join(main_result_path, 'playwright_traces', f'{time_step}.zip')}")
+            # todo need to figure out js equivalent for waiting until page load after action?
+            # https://stackoverflow.com/questions/1033398/how-to-execute-a-function-when-page-has-fully-loaded
 
-                    success_or_not = ""
-                    if valid_op_count == 0:
-                        success_or_not = "0"
-                    logger.info(f"Write results to json file: {os.path.join(main_result_path, 'result.json')}")
-                    final_json = {"confirmed_task": confirmed_task, "website": confirmed_website,
-                                  "task_id": task_id, "success_or_not": success_or_not,
-                                  "num_step": len(taken_actions), "action_history": taken_actions, "exit_by": str(e)}
+            if monitor_signal == 'pause':
+                pass# todo why do we skip the 3sec sleep if we're pausing?
+            else:
+                await asyncio.sleep(3)
+            logger.debug(f"current active page: {session_control.active_page}")
 
-                    with open(os.path.join(main_result_path, 'result.json'), 'w', encoding='utf-8') as file:
-                        json.dump(final_json, file, indent=4)
+            logger.debug("All pages")
+            logger.debug(session_control.context.pages)
+            logger.debug("-" * 10)
+            try:
+                await session_control.active_page.wait_for_load_state('load')
+            except Exception as e:
+                logger.debug(e)
+        except Exception as e:
+            logger.info("=" * 10)
+            logger.info(f"Decide to terminate because {e}")
+            logger.info("Action History:")
+            for action in taken_actions:
+                logger.info(action)
 
-                    if monitor:
-                        logger.info("Wait for human inspection. Directly press Enter to exit")
-                        monitor_input = await ainput()
+            success_or_not = ""
+            if valid_op_count == 0:
+                success_or_not = "0"
+            final_json = {"confirmed_task": confirmed_task, "website": "todo starting url",
+                          "task_id": task_id, "success_or_not": success_or_not,
+                          "num_step": len(taken_actions), "action_history": taken_actions, "exit_by": str(e)}
+            logger.info("Final JSON:" + json.dumps(final_json, indent=4))
+            if monitor:
+                logger.info("Wait for human inspection. Directly press Enter to exit")
+                monitor_input = await ainput()
 
-                    logger.info("Close browser context")
-                    logger.removeHandler(log_fh)
-                    logger.removeHandler(console_handler)
-                    close_context = session_control.context
-                    session_control.context = None
-                    await close_context.close()
+            logger.info("Close browser context")
+            logger.removeHandler(console_handler)
+            complete_flag = True
 
-                    complete_flag = True
+
+def log_separator_line(logger):
+    terminal_width = 10
+    logger.info("-" * terminal_width)
 
 
 if __name__ == "__main__":

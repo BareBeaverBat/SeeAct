@@ -491,15 +491,24 @@ async def get_interactive_elements_with_playwright(page):
                 interactive_elements.append(i)
     return interactive_elements
 
-#IN USE
+#IN USE TODO needs porting
 async def select_option(selector, value):
     best_option = [-1, "", -1]
     for i in range(await selector.locator("option").count()):
         option = await selector.locator("option").nth(i).inner_text()
         similarity = SequenceMatcher(None, option, value).ratio()
+        #todo need to find js equivalent of SequenceMatcher
+        # this isn't using the "is junk" parameter, so it should be easier to port
+        # maybe difflib.js?
+        # https://stackoverflow.com/questions/23305000/javascript-fuzzy-search-that-makes-sense
+        # seems there're a lot of competitors and a lot of people unhappy with them :(
+        # e.g. fuse.js or https://glench.github.io/fuzzyset.js/ or https://github.com/farzher/fuzzysort
         if similarity > best_option[2]:
             best_option = [i, option, similarity]
+
     await selector.select_option(index=best_option[0], timeout=10000)
+    #todo use options from here (need to experiment with which ones are most consistent)
+    # https://stackoverflow.com/questions/10911526/how-do-i-programatically-select-an-html-option-using-javascript
     return remove_extra_eol(best_option[1]).strip()
 
 
