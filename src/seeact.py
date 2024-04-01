@@ -57,7 +57,6 @@ class SessionControl:
     context = None
     browser = None
 
-
 session_control = SessionControl()
 
 
@@ -84,6 +83,8 @@ async def page_on_close_handler(page):
             #todo need to figure out how to port some of this logic to the chrome extension (or which parts to ignore)
             # I think it's irrelevant, b/c the agent loop will be running in code in an injected content script,
             # which would be running in the context of the page itself and so would die if the tab was closed
+            # feedback: lower priority, can be disregarded _for now_
+            # note- agent control loop may very well not be in the content script beyond the stage 2 prototype
             await aprint("The active tab was closed. Will switch to the last page (or open a new default google page)")
             # print("All pages:")
             # print('-' * 10)
@@ -114,7 +115,8 @@ async def page_on_crash_handler(page):
     await aprint("Try to reload")
     page.reload()
     #todo? figure out how to port this? can't see how the js in the page could recover from the page as a whole crashing
-
+    # feedback: lower priority, can be disregarded _for now_
+    # note- agent control loop may very well not be in the content script beyond the stage 2 prototype
 
 async def page_on_open_handler(page):
     # print("Opened: ",page)
@@ -150,6 +152,7 @@ async def main(config, base_dir) -> None:
     #todo browser code should also incorporate a task or run id based on timestamp at very start of run
     # and put that in logs (can modify the augmentLogMsg() function)
     # determine at start of content script (then put as global variable in window object)
+
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     confirmed_task = task_input
     task_id = file_name
@@ -266,14 +269,15 @@ async def main(config, base_dir) -> None:
 
         target_element = []#various bits of info about the target element
         new_action = ""
-        # todo is there a reason to have a default action like this? don't we treat the round as a no-op
-        #  if the llm didn't spit out a valid action name?
-        target_action = "CLICK"
+        target_action = ""
         target_value = ""
         query_count = 0
         #todo isn't this boolean flag redundant? either branch which sets it will also put a non-empty value in
         # target_action (this reasoning would only work if target_action stops having a default value of CLICK)
         got_one_answer = False
+
+        #todo test with large page whether you get elements that are not visible in viewport (probably, they're still in the dom),
+        # if so, try to filter for that and mark such elements (saying that the agent would need to scroll down or up to see them)
 
         #todo at least 1 separate method for element selection, with it also possibly split into sub-methods
         # block is ~100 lines long
@@ -310,9 +314,7 @@ async def main(config, base_dir) -> None:
             output0 = generation_model.generate(prompt=prompt, image_path="will be data url, not file path", turn_number=0)
             log_separator_line(logger)
             logger.debug("🤖Action Generation Output🤖")
-            # why can't the entire output (containing newlines) simply be passed to the logger at once?
-            for line in output0.split('\n'):
-                logger.info(line)
+            logger.info(output0)#double check whether this makes the output look bad in some way
             log_separator_line(logger)
 
             choice_text = f"(Multichoice Question) - Batch {multichoice_i // step_length}" + "\n" + format_options(choices)
@@ -399,6 +401,10 @@ async def main(config, base_dir) -> None:
             elif target_action == "TERMINATE":
                 raise Exception("The model determined a completion.")
 
+            #TODO need to add support for a SCROLL action
+            # remember that, after this, elements which had positive x-y coordinates might now have
+            # negative y coordinates
+
             # Perform browser action with PlayWright
             # The code is complex to handle all kinds of cases in execution
             # It's ugly, but it works, so far
@@ -419,6 +425,9 @@ async def main(config, base_dir) -> None:
                                 # https://playwright.dev/docs/api/class-locator#locator-highlight
                                 # docs say not to commit code that uses this function?
                                 # what does it even do (as distinct from hover)?
+                                #   was relevant when ranking items and only showing it the a batch of highlighted ones
+                                #   This might be helpful for user experience in monitor mode
+                                #   It's straightforwardly just about making the element distinctive/jump-out visually
                                 await selector.highlight()
                                 await asyncio.sleep(2.5)
                         except Exception as e:
@@ -434,6 +443,8 @@ async def main(config, base_dir) -> None:
 
                 # todo after chat with Boyuan to clarify questions in below big block, figure out how to break it up
                 if selector:
+                    #feedback from Boyu- for now, implement the actions and at least some of the backoff/fall-back logic,
+                    # but some of the niche/hard-to-understand bits of fall-back logic can be left for later iteration
                     valid_op_count += 1
                     if target_action == "CLICK":
                         js_click = True
@@ -472,8 +483,14 @@ async def main(config, base_dir) -> None:
                                 await selector.clear(timeout=10000)# js can set element.value to empty string
                                 await selector.fill("", timeout=10000)
                                 #why are we filling with empty string after we already cleared it?
+                                # feedback - needed in some cases related to placeholder values popping up in the textbox again after you clear it
+                                # todo test whether that's still a problem with js's approach of setting element.value?
                                 await selector.press_sequentially(target_value, timeout=10000)
                                 #todo ask Boyuan why we're using press_sequentially instead of fill
+                                # feedback- from Boyu: more robust than fill in practice, e.g.
+                                # aa.com flight status just ignoring an entire fill command if the fill command's text contained non-numeric input characters (that input element had type="text")
+                                # some other site had an input box where you had to fill it out twice for some reason before the text would actually show up
+                                # maybe check the 'type' of the input element?
                             except Exception as e0:
                                 await selector.fill(target_value, timeout=10000)
                         except Exception as e:
@@ -504,7 +521,7 @@ async def main(config, base_dir) -> None:
                                                       1] + " -> " + f"Failed to TYPE \"{target_value}\" because {e}, did a CLICK instead"
                                 except Exception as eee:
                                     try:
-                                        if not js_click:
+                                        if not js_click:#Boyu says this might be a mistake, where we try another js click iff we already finished trying one; gave permission to revise this sort of thing during porting
                                             logger.debug(eee)
                                             logger.info("Try performing a CLICK")
                                             await selector.evaluate("element => element.click()", timeout=10000)
@@ -515,7 +532,6 @@ async def main(config, base_dir) -> None:
                                             raise Exception(eee)
                                     except Exception as eeee:
                                         try:
-                                            #very confused, why are we doing a hover as the absolute last resort only for the TYPE action?
                                             logger.info("Try performing a HOVER")
                                             await selector.hover(timeout=10000)
                                             new_action = "[" + target_element[2] + "]" + " "
@@ -534,6 +550,7 @@ async def main(config, base_dir) -> None:
                         except Exception as e:
                             try:
                                 #there are cases where the action type is SELECT but the element is an input??
+                                # this is for handling the model getting confused
                                 if target_element[-1] in ["input"]:
                                     try:
                                         logger.info("Try performing a \"press_sequentially\"")
@@ -556,7 +573,6 @@ async def main(config, base_dir) -> None:
                                         #why are we doing js click for select and input elements but the playwright
                                         # click for others (in the scenario where the action name is SELECT)?
                                     else:
-
                                         await selector.click(timeout=10000)
                                     new_action = "[" + target_element[2] + "]" + " "
                                     new_action += target_element[
@@ -631,7 +647,10 @@ async def main(config, base_dir) -> None:
                             await session_control.active_page.keyboard.press('Enter')
                             #https://playwright.dev/docs/api/class-keyboard#keyboard-press
                             # how does this differ from locator.press()? not sure how to replicate this as separate
-                            # thing in js
+                            # thing in js;
+                            # Boyu- first option targets a specifically identified element in the dom while the latter
+                            # can be used even if the model didn't give an element name (as long as the correct element was already focussed from prev steps)
+                            # todo figure out how latter can be reproduced in js
                 elif monitor_signal == "pause":
                     logger.info(
                         "Pause for human intervention. Press Enter to continue. You can also enter your message here, which will be included in the action history as a human message.")
@@ -642,10 +661,10 @@ async def main(config, base_dir) -> None:
                         f"the human supervisor rejected this operation and may have taken some actions.{human_intervention}")
                 elif monitor_signal == "reject":
                     raise Exception("the human supervisor rejected this operation.")
-                elif target_element == "PRESS ENTER":#wth? the element is PRESS ENTER???
+                elif target_element == "PRESS ENTER":#wth? the element is PRESS ENTER??? model confusion :(
                     logger.info("Try performing a PRESS ENTER")
                     await session_control.active_page.keyboard.press('Enter')
-                no_op_count = 0#why are we resetting the no op count here?
+                no_op_count = 0#why are we resetting the no op count here? neither Boyu nor I are confident about this, but it can be disregarded for now
                 try:
                     await session_control.active_page.wait_for_load_state('load')
                     # https://stackoverflow.com/questions/1033398/how-to-execute-a-function-when-page-has-fully-loaded
@@ -668,15 +687,21 @@ async def main(config, base_dir) -> None:
                 await session_control.context.new_page()
                 try:
                     #todo ask if should just cut this, not sure how it would be relevant in non-playwright context
+                    # feedback- user might close all pages during process, but that might not be relevant in the browser extension
+                    # low priority, can be disregarded for now
                     await session_control.active_page.goto("starting url??", wait_until="load")
                 except Exception as e:
                     pass
+
+            #todo need to test scenario where agent is cut off by the tab being closed and ensure that extension is
+            # still stable and can be used for other tasks afterwards
 
             # todo need to figure out js equivalent for waiting until page load after action?
             # https://stackoverflow.com/questions/1033398/how-to-execute-a-function-when-page-has-fully-loaded
 
             if monitor_signal == 'pause':
                 pass# todo why do we skip the 3sec sleep if we're pausing?
+                # feedback - can disregard this, just ensure that there's room/time for human observation/intervention between steps
             else:
                 await asyncio.sleep(3)
             logger.debug(f"current active page: {session_control.active_page}")
